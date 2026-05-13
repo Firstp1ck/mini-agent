@@ -1,8 +1,8 @@
 """Lightweight Markdown → Tkinter ``Text`` segments (chat-friendly subset).
 
 Supports fenced code blocks, ATX headings, bullet lines, blockquotes, links,
-bold, italic, inline code, and strikethrough. Unknown syntax falls through as
-plain text.
+bold, italic, inline code, strikethrough, and highlights (``==mark==``).
+Unknown syntax falls through as plain text.
 """
 
 from __future__ import annotations
@@ -34,6 +34,13 @@ def _parse_inline(rest: str, base: tuple[str, ...]) -> Iterator[tuple[str, tuple
             end = rest.find("~~", 2)
             if end != -1:
                 yield rest[2:end], base + ("md_strike",)
+                rest = rest[end + 2 :]
+                continue
+
+        if rest.startswith("=="):
+            end = rest.find("==", 2)
+            if end != -1:
+                yield rest[2:end], base + ("md_mark",)
                 rest = rest[end + 2 :]
                 continue
 
@@ -156,7 +163,8 @@ def iter_markdown_segments(markdown: str, base: tuple[str, ...]) -> Iterator[tup
         base: Bubble / role tags prepended to every segment.
 
     Yields:
-        ``(fragment, tags)`` suitable for ``widget.insert("end", fragment, *tags)``.
+        ``(fragment, tags)`` suitable for ``widget.insert("end", fragment, tags)`` —
+        ``tags`` must be passed as one tuple (Tk alternates ``chars, taglist, …``).
     """
     pos = 0
     for match in _FENCE.finditer(markdown):
@@ -184,6 +192,6 @@ def insert_markdown(widget: TkText, markdown: str, base_tags: tuple[str, ...]) -
         if not fragment:
             continue
         if tags:
-            widget.insert("end", fragment, *tags)
+            widget.insert("end", fragment, tags)
         else:
             widget.insert("end", fragment)

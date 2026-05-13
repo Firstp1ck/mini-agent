@@ -23,6 +23,8 @@ Rules:
 - After receiving tool_result(...), continue the task.
 - Prefer reading/listing before editing existing files.
 - If no tool is needed, respond normally.
+- When responding in natural language, use Markdown where it helps clarity
+  (headings, lists, code fences, emphasis); skip heavy formatting for trivial replies.
 """.strip()
 
 
