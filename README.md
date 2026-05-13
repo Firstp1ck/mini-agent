@@ -28,7 +28,8 @@ providers later, change `MINI_AGENT_PROVIDER` in `.env` (or unset it to be
 asked again). See [`.env.example`](.env.example) for the full set of
 variables.
 
-Use **Ctrl-D** (Unix) or **Ctrl-C**, to leave the session.
+To leave the session: **Ctrl-C** always works. On **Unix/macOS**, **Ctrl-D**
+sends end-of-file. On **Windows**, **Ctrl-Z** then **Enter** for EOF (Ctrl-D is not EOF and may show as ``^D``).
 
 ## Project guides (optional)
 

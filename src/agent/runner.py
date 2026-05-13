@@ -9,6 +9,7 @@ exchange messages. All vendor-specific behavior lives under
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,6 +29,13 @@ TOOL_COLOR = "\033[90m"
 RESET_COLOR = "\033[0m"
 
 
+def _repl_exit_hint() -> str:
+    """Return how to leave the REPL on this OS (EOF differs on Windows vs Unix)."""
+    if sys.platform == "win32":
+        return "Ctrl-Z then Enter, or Ctrl-C, to exit."
+    return "Ctrl-D or Ctrl-C to exit."
+
+
 def run_agent() -> None:
     """Run the interactive REPL: read user input, call the model, run tools.
 
@@ -45,7 +53,7 @@ def run_agent() -> None:
     ]
 
     print(f"Mini Agent using {provider.name} ({provider.model}) in {Path.cwd()}.")
-    print("Ctrl-D or Ctrl-C to exit.")
+    print(_repl_exit_hint())
     while True:
         try:
             user_input = input(f"{YOU_COLOR}You:{RESET_COLOR} ").strip()
