@@ -56,6 +56,7 @@ class MiniAgentApp:
         self._provider: Provider | None = None
         self._injected_guide_paths: set[str] | None = None
         self._busy = False
+        self._activity_visible = False
 
         self._entry.bind("<Return>", lambda _e: self._on_send())
         self._set_ui_enabled(False)
@@ -88,6 +89,33 @@ class MiniAgentApp:
             text: Short status message.
         """
         self._status.configure(text=text)
+
+    def _ensure_activity_visible(self) -> None:
+        """Show the indeterminate progress strip once per busy segment (main thread)."""
+        if self._activity_visible:
+            return
+        self._activity_visible = True
+        strip = self._widgets.activity_strip
+        bar = self._widgets.activity_progress
+        strip.pack(fill=tk.X, pady=(2, 0), before=self._status)
+        bar.start()
+
+    def _hide_activity_visible(self) -> None:
+        """Stop and hide the progress strip (main thread)."""
+        if not self._activity_visible:
+            return
+        self._activity_visible = False
+        self._widgets.activity_progress.stop()
+        self._widgets.activity_strip.pack_forget()
+
+    def _on_working_phase(self, message: str) -> None:
+        """Apply a status line from :func:`drive_agent_turn` ``working`` yields (main thread).
+
+        Args:
+            message: Human-readable description of the current step.
+        """
+        self._ensure_activity_visible()
+        self._set_status(message)
 
     def _kickoff_bootstrap(self) -> None:
         """Resolve provider on the Tk thread, then finish setup in the background."""
@@ -149,7 +177,8 @@ class MiniAgentApp:
         self._entry.delete(0, "end")
         self._busy = True
         self._set_ui_enabled(False)
-        self._set_status("Thinking…")
+        self._ensure_activity_visible()
+        self._set_status("Sending your message…")
         self._transcript_panel.append_user_message(text)
 
         conv = self._conversation
@@ -176,6 +205,9 @@ class MiniAgentApp:
             for kind, payload in drive_agent_turn(
                 conversation, provider, injected_guide_paths, user_text
             ):
+                if kind == "working":
+                    self._root.after(0, partial(self._on_working_phase, str(payload)))
+                    continue
                 if kind == "tool":
                     name, args, _result = payload
                     self._root.after(0, partial(panel.append_tool_card, name, args))
@@ -192,6 +224,7 @@ class MiniAgentApp:
 
             def on_done() -> None:
                 self._busy = False
+                self._hide_activity_visible()
                 self._set_ui_enabled(True)
                 self._set_status("Ready.")
 

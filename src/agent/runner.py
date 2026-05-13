@@ -31,6 +31,69 @@ TOOL_COLOR = "\033[90m"
 RESET_COLOR = "\033[0m"
 
 
+def _ellipsize_plain_line(text: str, max_len: int) -> str:
+    """Collapse runs of whitespace to single spaces and cap length with an ellipsis.
+
+    Args:
+        text: Arbitrary text (may contain newlines).
+        max_len: Maximum length of the returned string (including ellipsis when trimmed).
+
+    Returns:
+        A single-line string at most ``max_len`` characters.
+    """
+    one_line = " ".join(text.split())
+    if len(one_line) <= max_len:
+        return one_line
+    return one_line[: max_len - 1] + "…"
+
+
+def _working_message_for_model() -> str:
+    """Return a short status line while blocked on the LLM."""
+    return "Waiting for the model…"
+
+
+def _working_message_for_tool(name: str, args: dict[str, Any]) -> str:
+    """Return a short status line while a tool runs (for GUI status text).
+
+    Args:
+        name: Tool name from :data:`agent.tools.TOOL_REGISTRY`.
+        args: Keyword arguments passed to the tool.
+
+    Returns:
+        Human-readable, single-line summary.
+    """
+    if name == "read_file":
+        raw = args.get("filename")
+        if isinstance(raw, str) and raw.strip():
+            tip = Path(raw).name or raw.strip()
+            return f"Reading file «{_ellipsize_plain_line(tip, 48)}»…"
+        return "Reading a file…"
+
+    if name == "list_files":
+        raw = args.get("path", ".")
+        if isinstance(raw, str) and raw.strip():
+            tip = Path(raw).name or raw.strip() or "."
+            return f"Listing folder «{_ellipsize_plain_line(tip, 44)}»…"
+        return "Listing a folder…"
+
+    if name == "edit_file":
+        raw = args.get("path")
+        old = args.get("old_str", "")
+        if isinstance(raw, str) and raw.strip():
+            tip = Path(raw).name or raw.strip()
+            action = "Creating" if old == "" else "Editing"
+            return f"{action} «{_ellipsize_plain_line(tip, 40)}»…"
+        return "Editing a file…"
+
+    if name == "bash":
+        raw = args.get("command")
+        if isinstance(raw, str) and raw.strip():
+            return f"Running command: {_ellipsize_plain_line(raw, 52)}"
+        return "Running a shell command…"
+
+    return f"Running tool «{name}»…"
+
+
 def _repl_exit_hint() -> str:
     """Return how to leave the REPL on this OS (EOF differs on Windows vs Unix)."""
     if sys.platform == "win32":
@@ -58,6 +121,8 @@ def drive_agent_turn(
         user_text: Non-empty user message for this turn.
 
     Yields:
+        ``("working", status_text)`` before each model call and before each tool
+        execution (intended for progress UI; safe to ignore in CLI).
         ``("tool", (tool_name, args_dict, result))`` for each executed tool, then
         ``("assistant", assistant_text)`` once when the model returns a non-tool
         reply. The conversation is updated before each yield.
@@ -68,6 +133,7 @@ def drive_agent_turn(
     """
     conversation.append({"role": "user", "content": user_text})
     while True:
+        yield ("working", _working_message_for_model())
         assistant_text = provider.call(conversation)
         invocations = extract_tool_invocations(assistant_text)
         if not invocations:
@@ -77,6 +143,7 @@ def drive_agent_turn(
 
         conversation.append({"role": "assistant", "content": assistant_text})
         for name, args in invocations:
+            yield ("working", _working_message_for_tool(name, args))
             result = TOOL_REGISTRY[name](**args)
             guide_candidates: list[Path] = []
             for directory in work_directories_for_tool(name, args):
@@ -122,6 +189,8 @@ def run_agent() -> None:
         for kind, payload in drive_agent_turn(
             conversation, provider, injected_guide_paths, user_input
         ):
+            if kind == "working":
+                continue
             if kind == "tool":
                 name, args, _result = payload
                 print(f"{TOOL_COLOR}tool: {name}({json.dumps(args)}){RESET_COLOR}")

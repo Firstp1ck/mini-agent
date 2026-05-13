@@ -36,6 +36,13 @@ def apply_global_style() -> None:
         arrowsize=12,
     )
     style.map("Vertical.TScrollbar", background=[("active", "#94a3b8"), ("pressed", "#64748b")])
+    style.configure(
+        "MiniActivity.Horizontal.TProgressbar",
+        troughcolor=COMPOSER_BG,
+        background=ACCENT,
+        thickness=5,
+        borderwidth=0,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +54,8 @@ class ShellWidgets:
     composer: tk.Frame
     entry: tk.Entry
     send: tk.Button
+    activity_strip: tk.Frame
+    activity_progress: ttk.Progressbar
     status: tk.Label
 
 
@@ -119,6 +128,14 @@ def build_chat_shell(root: tk.Tk) -> ShellWidgets:
         disabledforeground="#cbd5e1",
         highlightthickness=0,
     )
+    activity_strip = tk.Frame(composer, bg=COMPOSER_BG)
+    activity_progress = ttk.Progressbar(
+        activity_strip,
+        mode="indeterminate",
+        style="MiniActivity.Horizontal.TProgressbar",
+    )
+    activity_progress.pack(fill=tk.X, padx=14, pady=(4, 0))
+
     status = tk.Label(
         composer,
         text="Starting…",
@@ -143,5 +160,7 @@ def build_chat_shell(root: tk.Tk) -> ShellWidgets:
         composer=composer,
         entry=entry,
         send=send,
+        activity_strip=activity_strip,
+        activity_progress=activity_progress,
         status=status,
     )
