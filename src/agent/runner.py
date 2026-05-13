@@ -14,9 +14,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from agent.llm import extract_tool_invocations
-from agent.prompt import system_prompt
+from agent.prompt import (
+    collect_guide_paths_walking_up,
+    format_new_guide_sections,
+    system_prompt,
+)
 from agent.providers import build_provider, resolved_llm_provider
-from agent.tools import TOOL_REGISTRY
+from agent.tools import TOOL_REGISTRY, work_directories_for_tool
 
 YOU_COLOR = "\033[94m"
 ASSISTANT_COLOR = "\033[93m"
@@ -32,7 +36,13 @@ def run_agent() -> None:
     """
     load_dotenv(Path.cwd() / ".env", override=False)
     provider = build_provider(resolved_llm_provider())
-    conversation: list[dict[str, str]] = [{"role": "system", "content": system_prompt()}]
+    injected_guide_paths: set[str] = set()
+    initial_suffix, _ = format_new_guide_sections(
+        collect_guide_paths_walking_up(Path.cwd()), injected_guide_paths
+    )
+    conversation: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt() + initial_suffix}
+    ]
 
     print(f"Mini Agent using {provider.name} ({provider.model}) in {Path.cwd()}.")
     print("Ctrl-D or Ctrl-C to exit.")
@@ -59,4 +69,12 @@ def run_agent() -> None:
             for name, args in invocations:
                 print(f"{TOOL_COLOR}tool: {name}({json.dumps(args)}){RESET_COLOR}")
                 result = TOOL_REGISTRY[name](**args)
+                guide_candidates: list[Path] = []
+                for directory in work_directories_for_tool(name, args):
+                    guide_candidates.extend(collect_guide_paths_walking_up(directory))
+                extra_suffix, _ = format_new_guide_sections(
+                    guide_candidates, injected_guide_paths
+                )
+                if extra_suffix:
+                    conversation[0]["content"] += extra_suffix
                 conversation.append({"role": "user", "content": f"tool_result({json.dumps(result)})"})
