@@ -1,0 +1,111 @@
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            spec: packaging/pyinstaller/windows-nsis.spec
+            artifact_name: mini-agent-windows-setup
+          - os: ubuntu-latest
+            spec: packaging/pyinstaller/linux.spec
+            artifact_name: mini-agent-linux-onefile
+          - os: macos-latest
+            spec: packaging/pyinstaller/macos.spec
+            artifact_name: mini-agent-macos-dmg
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync dependencies (locked)
+        run: uv sync --frozen --all-groups
+
+      - name: Install NSIS (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install nsis -y
+
+      - name: Build with PyInstaller
+        run: uv run pyinstaller ${{ matrix.spec }}
+
+      - name: Build NSIS installer (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $refName = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($refName)) { $refName = "dev" }
+          makensis /DVERSION=$refName packaging/windows/mini-agent.nsi
+
+      - name: Create macOS DMG
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -eux
+          test -d "dist/macos/mini-agent.app"
+          hdiutil create -volname "mini-agent" -srcfolder "dist/macos/mini-agent.app" \
+            -ov -format UDZO "dist/macos/mini-agent-macos.dmg"
+
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/windows-nsis/mini-agent-Setup.exe
+
+      - name: Upload artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/linux/mini-agent
+
+      - name: Upload artifact (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/macos/mini-agent-macos.dmg
+
+  release:
+    name: GitHub Release (tag only)
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: mini-agent-*
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "release-assets/**"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

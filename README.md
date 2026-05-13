@@ -94,11 +94,11 @@ and run the spec from the repository root:
 
 ```bash
 uv sync --group build
-uv run pyinstaller mini-agent.spec
+uv run pyinstaller packaging/pyinstaller/windows.spec
 ```
 
 Output is configured under `dist/windows/`. Details and icon notes live in
-[`mini-agent.spec`](mini-agent.spec).
+[`packaging/pyinstaller/windows.spec`](packaging/pyinstaller/windows.spec).
 
 ## Notes
 

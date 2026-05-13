@@ -17,7 +17,8 @@ This document helps automated agents and contributors find their way around the 
 | `src/agent/prompt.py` | System prompt text for the agent. |
 | `src/agent/config.py` | Env loading, API client/model resolution, defaults. |
 | `pyproject.toml` | Dependencies, scripts (`mini-agent = "main:main"`), build config. |
-| `mini-agent.spec` | PyInstaller spec for optional binary builds. |
+| `packaging/pyinstaller/*.spec` | PyInstaller specs (local Windows build; CI release matrix). |
+| `packaging/windows/mini-agent.nsi` | NSIS installer script used by the release workflow (Windows). |
 | `README.md` | User-facing install and run instructions. |
 
 When adding behavior, prefer the smallest change that fits the existing module boundaries. If a file grows toward the line limit (see rules below), split by responsibility (e.g. new submodule under `src/agent/`) rather than inflating one file.
