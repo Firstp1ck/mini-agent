@@ -1,12 +1,21 @@
+"""Interactive REPL that drives the agent loop.
+
+The runner is provider-agnostic: it builds a :class:`agent.providers.Provider`
+based on ``MINI_AGENT_PROVIDER`` and then only calls ``provider.call`` to
+exchange messages. All vendor-specific behavior lives under
+:mod:`agent.providers`.
+"""
+
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
-import anthropic
+from dotenv import load_dotenv
 
-from agent.config import DEFAULT_MODEL, ensure_anthropic_client, ensure_anthropic_model
-from agent.llm import call_llm, extract_tool_invocations
+from agent.llm import extract_tool_invocations
 from agent.prompt import system_prompt
+from agent.providers import build_provider, resolved_llm_provider
 from agent.tools import TOOL_REGISTRY
 
 YOU_COLOR = "\033[94m"
@@ -16,17 +25,14 @@ RESET_COLOR = "\033[0m"
 
 
 def run_agent() -> None:
-    """Run the interactive REPL: read user input, call the model, run tools in a loop.
+    """Run the interactive REPL: read user input, call the model, run tools.
 
-    Loads API credentials and default model from config, then alternates between
+    Loads ``.env``, selects and configures a provider, then alternates between
     assistant replies and tool execution until a non-tool response is printed.
-
-    Raises:
-        SystemExit: If the configured model id is not found for the account.
     """
-    client = ensure_anthropic_client()
-    model = ensure_anthropic_model(client.models)
-    conversation = [{"role": "system", "content": system_prompt()}]
+    load_dotenv(Path.cwd() / ".env", override=False)
+    provider = build_provider(resolved_llm_provider())
+    conversation: list[dict[str, str]] = [{"role": "system", "content": system_prompt()}]
 
     print("Mini Agent. Ctrl-D or Ctrl-C to exit.")
     while True:
@@ -40,15 +46,7 @@ def run_agent() -> None:
 
         conversation.append({"role": "user", "content": user_input})
         while True:
-            try:
-                assistant_text = call_llm(client, conversation, model)
-            except anthropic.NotFoundError as exc:
-                raise SystemExit(
-                    f"Anthropic model not found: {model!r}. "
-                    "Set ANTHROPIC_MODEL to a model available to your account "
-                    "or remove it to use the current default "
-                    f"'{DEFAULT_MODEL}'."
-                ) from exc
+            assistant_text = provider.call(conversation)
 
             invocations = extract_tool_invocations(assistant_text)
             if not invocations:

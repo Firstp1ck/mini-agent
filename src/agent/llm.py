@@ -1,9 +1,13 @@
+"""Provider-agnostic helpers shared by the agent loop.
+
+Currently this is just the parser for tool invocation lines emitted by the
+model. Each LLM backend lives under :mod:`agent.providers`.
+"""
+
 from __future__ import annotations
 
 import json
 from typing import Any
-
-import anthropic
 
 from agent.tools import TOOL_REGISTRY
 
@@ -32,25 +36,3 @@ def extract_tool_invocations(text: str) -> list[tuple[str, dict[str, Any]]]:
         except Exception:
             continue
     return invocations
-
-
-def call_llm(client: anthropic.Anthropic, conversation: list[dict[str, str]], model: str) -> str:
-    """Send the conversation to Claude and return the assistant text.
-
-    Args:
-        client: Authenticated Anthropic client.
-        conversation: Messages with roles ``system``, ``user``, and ``assistant``.
-        model: Model id for ``messages.create``.
-
-    Returns:
-        Text content of the first response block, or a string representation
-        if the block is not plain text.
-    """
-    response = client.messages.create(
-        model=model,
-        max_tokens=2000,
-        system=conversation[0]["content"],
-        messages=conversation[1:],
-    )
-    block = response.content[0]
-    return block.text if block.type == "text" else str(block)

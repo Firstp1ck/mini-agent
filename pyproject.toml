@@ -1,13 +1,13 @@
 [project]
 name = "mini-agent"
 version = "0.1.0"
-description = "A minimal coding agent with file tools and an Anthropic LLM loop"
+description = "A minimal coding agent with file tools and an Anthropic or OpenAI LLM loop"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "mini-agent contributors" }]
-keywords = ["anthropic", "claude", "agent", "llm", "coding-agent"]
+keywords = ["anthropic", "claude", "openai", "agent", "llm", "coding-agent"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "anthropic>=0.72.0",
+    "openai>=1.54.0",
     "pip-system-certs>=5.3",
     "python-dotenv>=1.2.0",
 ]
