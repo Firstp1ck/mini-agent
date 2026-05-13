@@ -1,0 +1,28 @@
+[project]
+name = "mini-agent"
+version = "0.1.0"
+description = "A minimal coding agent with file tools and an Anthropic LLM loop"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.72.0",
+    "pip-system-certs>=5.3",
+    "pyinstaller>=6.20.0",
+    "python-dotenv>=1.2.0",
+]
+
+[project.scripts]
+mini-agent = "main:main"
+
+[tool.uv]
+package = true
+# Use Windows/macOS/Linux trust store for PyPI (same corporate roots as browsers).
+native-tls = true
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/main.py", "src/agent"]
+sources = ["src"]
+
+[build-system]
+requires = ["hatchling>=1.28.0"]
+build-backend = "hatchling.build"
