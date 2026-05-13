@@ -12,7 +12,7 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 FALLBACK_MODELS = [
     ("claude-opus-4-7", "Claude Opus 4.7"),
     ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-    ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
 ]
 
 

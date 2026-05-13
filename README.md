@@ -1,51 +1,34 @@
 # mini-agent
 
-A minimal Python coding agent based on the loop described in Mihail Eric's
+A minimal Python coding agent that gives an Anthropic model four local tools:
+`read_file`, `list_files`, `edit_file`, `bash`. The model emits textual tool
+calls, Python runs them, results are fed back into the conversation.
+
+Inspired by Mihail Eric's
 ["The Emperor Has No Clothes"](https://www.mihaileric.com/The-Emperor-Has-No-Clothes/).
 
-It gives an Anthropic model four local tools:
-
-- `read_file(filename)`
-- `list_files(path)`
-- `edit_file(path, old_str, new_str)`
-- `bash(command, timeout=30)`
-
-The model emits textual tool calls, Python executes them locally, and tool results
-are fed back into the conversation.
-
-## Setup
+## Install & run
 
 ```bash
 uv sync
 uv run mini-agent
 ```
 
-On first run, if `.env` is missing or `ANTHROPIC_API_KEY` is not set, the agent
-prompts for your key and saves it to `.env`. If `ANTHROPIC_MODEL` is missing, it
-fetches the current Anthropic model list, asks you to choose one, and saves that
-selection to `.env` too.
+On first run the agent prompts for your `ANTHROPIC_API_KEY` (and a model
+choice) and saves them to `.env`.
 
-Optional manual setup:
+## Requirements
 
-```bash
-cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY / ANTHROPIC_MODEL
-```
-
-## Run
-
-```bash
-uv run mini-agent
-```
-
-Example prompt:
-
-```text
-Create hello.py with a function that returns "hello world".
-```
+- Python 3.11+
+- An Anthropic API key
+- `bash` on `PATH` for the `bash` tool (Git Bash or WSL on Windows)
 
 ## Notes
 
-This is intentionally small and educational. It has no sandboxing, streaming,
-context compaction, or approval workflow. Run it only in a workspace where you
-are comfortable allowing file edits and shell commands.
+No sandboxing, no streaming, no approval workflow. The agent can read, edit,
+and execute shell commands in the working directory — run it only where you
+are comfortable with that.
+
+## License
+
+[MIT](LICENSE)
