@@ -12,6 +12,20 @@ program runs them and feeds results back into the conversation.
 Inspired by Mihail Eric's
 ["The Emperor Has No Clothes"](https://www.mihaileric.com/The-Emperor-Has-No-Clothes/).
 
+## Screenshots (v0.1.0)
+
+**Terminal** — interactive CLI session with tool calls and replies.
+
+![mini-agent terminal session](images/Terminal_v0.1.0.png)
+
+**GUI** — desktop chat window.
+
+![mini-agent GUI chat](images/GUI_v0.1.0.png)
+
+**GUI setup** — first-run provider, key, model, and thinking prompts.
+
+![mini-agent GUI first-run setup](images/GUI_Setup_v0.1.0.png)
+
 ## Install & run
 
 ```bash
@@ -39,21 +53,21 @@ variables.
 Set `MINI_AGENT_THINKING` to control how hard the model thinks before
 replying:
 
-| Value | Anthropic (Claude) | OpenAI (GPT-5 family) |
-|-------|--------------------|-----------------------|
-| `auto` / unset | adaptive thinking, default effort `high` on Opus 4.7 / Opus 4.6 / Sonnet 4.6 (silently off on older models) | API default (`medium` on `gpt-5.5`) |
+| Value | Anthropic (Claude) | OpenAI (reasoning models) |
+|-------|--------------------|---------------------------|
+| `auto` / unset | adaptive thinking with API default effort on Opus 4.7 / Opus 4.6 / Sonnet 4.6 / Mythos; thinking off on older models | API default (`medium` on `gpt-5.5`) |
 | `off` | no extended thinking | `reasoning.effort=none` |
-| `low` / `medium` / `high` | adaptive thinking with that effort | `reasoning.effort` set to the same level |
-| `max` / `xhigh` | deepest adaptive effort available on the model | `reasoning.effort=xhigh` |
+| `low` / `medium` / `high` / `max` | adaptive thinking + `effort` on 4.6+; manual `budget_tokens` (≈2k/4k/8k/12k) on Opus 4.5 / Sonnet 4.5 / Haiku 4.5 / Claude 3.x | `reasoning.effort` set to the same level (`max` → `xhigh`) |
+| `xhigh` | adaptive + `effort=xhigh` (Claude Opus 4.7 only) | `reasoning.effort=xhigh` |
 
 The setup picker (both CLI and GUI) only offers the values that the chosen
-provider **and** specific model accept (per the live provider docs as of
-May 2026):
+provider **and** specific model accept (per the live provider docs):
 
 - **Claude Opus 4.7** — `auto, off, low, medium, high, max, xhigh`
-- **Claude Opus 4.6 / Sonnet 4.6 / Mythos** — `auto, off, low, medium, high, max`
-- **Older Claude** (`sonnet-4-5`, `haiku-4-5`, ...) — `auto, off` only (no adaptive thinking)
-- **GPT-5.4 / GPT-5.5 family** — `auto, off, low, medium, high, max, xhigh`
+- **Claude Opus 4.6 / Sonnet 4.6 / Mythos Preview** — `auto, off, low, medium, high, max` (adaptive)
+- **Claude Opus 4.5 / Sonnet 4.5 / Haiku 4.5 / Claude 3.x** — `auto, off, low, medium, high, max` (manual extended thinking via `budget_tokens`)
+- **GPT-5 family + o-series (o1 / o3 / o4)** — `auto, off, low, medium, high, max, xhigh`
+- **GPT-4o / GPT-4 / chatgpt-* / GPT-3.5 chat models** — `auto, off` only (no `reasoning` parameter)
 
 To leave the session: **Ctrl-C** always works. On **Unix/macOS**, **Ctrl-D**
 sends end-of-file. On **Windows**, **Ctrl-Z** then **Enter** for EOF (Ctrl-D is not EOF and may show as ``^D``).

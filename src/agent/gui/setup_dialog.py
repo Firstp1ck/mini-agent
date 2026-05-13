@@ -18,30 +18,23 @@ from typing import Any, cast
 
 import tkinter as tk
 
+from agent.gui._setup_layout import (
+    build_setup_widgets,
+    model_dropdown_values,
+    select_initial_model,
+    thinking_display_entry,
+    thinking_menu_for,
+)
 from agent.gui._setup_providers import (
     ProviderSetupInfo,
     fetch_live_models,
     provider_info,
     validate_credentials,
 )
-from agent.gui._setup_style import (
-    SHELL_BG,
-    apply_setup_style,
-    make_card,
-    make_field_combo,
-    make_field_entry,
-    make_field_label,
-    make_primary_button,
-    make_secondary_button,
-    make_status_label,
-)
+from agent.gui.theme import DANGER, MUTED, SUCCESS
 from agent.providers import AVAILABLE_PROVIDERS, ProviderName
 from agent.providers._shared import write_env_value
-from agent.providers._thinking import (
-    SETUP_THINKING_MENU,
-    VALID_LEVELS,
-    filter_thinking_menu,
-)
+from agent.providers._thinking import VALID_LEVELS
 
 
 @dataclass(frozen=True)
@@ -113,150 +106,6 @@ def apply_setup_result(result: SetupResult) -> None:
     os.environ["MINI_AGENT_THINKING"] = result.thinking
 
 
-def _build_setup_widgets(dialog: tk.Toplevel) -> dict[str, Any]:
-    """Lay out the dialog widgets and return a handle dict.
-
-    The API key row (label + entry) is created but not gridded; the caller's
-    provider-change handler grids it once a provider is picked.
-
-    Args:
-        dialog: Toplevel that will host the form.
-
-    Returns:
-        Mapping of widget/variable names to instances. Keys: ``provider_var``,
-        ``provider_combo``, ``api_label``, ``api_entry``, ``api_var``,
-        ``model_var``, ``model_combo``, ``thinking_var``, ``thinking_combo``,
-        ``status_var``, ``ok_btn``, ``cancel_btn``.
-    """
-    apply_setup_style(dialog)
-    dialog.configure(bg=SHELL_BG)
-
-    outer = tk.Frame(dialog, bg=SHELL_BG, padx=18, pady=18)
-    outer.pack(fill="both", expand=True)
-    card = make_card(outer)
-    card.pack(fill="both", expand=True, ipadx=18, ipady=18)
-
-    provider_var = tk.StringVar()
-    model_var = tk.StringVar()
-    api_var = tk.StringVar()
-    thinking_var = tk.StringVar()
-    status_var = tk.StringVar(value="")
-
-    make_field_label(card, "Provider:").grid(row=0, column=0, sticky="w", pady=6, padx=(16, 12))
-    provider_combo = make_field_combo(card, provider_var)
-    provider_combo.configure(values=[label for _, label in AVAILABLE_PROVIDERS], state="readonly")
-    provider_combo.grid(row=0, column=1, sticky="ew", pady=6, padx=(0, 16))
-
-    make_field_label(card, "Model:").grid(row=1, column=0, sticky="w", pady=6, padx=(16, 12))
-    model_combo = make_field_combo(card, model_var)
-    model_combo.grid(row=1, column=1, sticky="ew", pady=6, padx=(0, 16))
-
-    make_field_label(card, "Thinking:").grid(row=2, column=0, sticky="w", pady=6, padx=(16, 12))
-    thinking_combo = make_field_combo(card, thinking_var)
-    thinking_combo.grid(row=2, column=1, sticky="ew", pady=6, padx=(0, 16))
-
-    api_label = make_field_label(card, "API key:")
-    api_entry = make_field_entry(card, api_var, show="•")
-
-    status_label = make_status_label(card, status_var)
-    status_label.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0), padx=16)
-
-    button_row = tk.Frame(card, bg=card["bg"])
-    button_row.grid(row=5, column=0, columnspan=2, pady=(16, 0), padx=16, sticky="e")
-    ok_btn = make_primary_button(button_row, "OK")
-    cancel_btn = make_secondary_button(button_row, "Cancel")
-    cancel_btn.pack(side="right", padx=(8, 0))
-    ok_btn.pack(side="right")
-
-    return {
-        "card": card,
-        "provider_var": provider_var,
-        "provider_combo": provider_combo,
-        "api_label": api_label,
-        "api_entry": api_entry,
-        "api_var": api_var,
-        "model_var": model_var,
-        "model_combo": model_combo,
-        "thinking_var": thinking_var,
-        "thinking_combo": thinking_combo,
-        "status_var": status_var,
-        "ok_btn": ok_btn,
-        "cancel_btn": cancel_btn,
-    }
-
-
-def _thinking_menu_for(provider_id: ProviderName, model_id: str) -> list[tuple[str, str]]:
-    """Return the thinking menu filtered to what this provider+model accepts.
-
-    Falls back to the full :data:`SETUP_THINKING_MENU` if the filter returns
-    nothing (defensive — should never happen in practice).
-
-    Args:
-        provider_id: Resolved provider id.
-        model_id: Selected model id (may be empty if the user hasn't chosen).
-
-    Returns:
-        Ordered ``(value, label)`` pairs for the dropdown.
-    """
-    if not model_id:
-        return list(SETUP_THINKING_MENU)
-    menu = filter_thinking_menu(provider_id, model_id)
-    return menu or list(SETUP_THINKING_MENU)
-
-
-def _thinking_display_entry(menu: list[tuple[str, str]], value: str) -> str:
-    """Return the combobox display string for ``value``, or pick the default.
-
-    The display is just the bare level name (for example ``"auto"`` or
-    ``"medium"``) so the dropdown stays scannable.
-
-    Args:
-        menu: Available ``(value, label)`` entries from :func:`_thinking_menu_for`.
-        value: Preferred value (typically from ``MINI_AGENT_THINKING``).
-
-    Returns:
-        ``value`` when it appears in ``menu``; otherwise the first menu entry's
-        value.
-    """
-    for v, _label in menu:
-        if v == value:
-            return v
-    return menu[0][0]
-
-
-def _model_dropdown_values(info: ProviderSetupInfo) -> list[str]:
-    """Return the fallback model ids as combobox entries.
-
-    The display string is the bare model identifier (for example
-    ``"gpt-5.5"``). Providers like OpenAI use the same string for id and
-    display name, so an ``"id — name"`` form just duplicated the text.
-
-    Args:
-        info: Provider setup metadata.
-
-    Returns:
-        Ordered model id strings for the chosen provider.
-    """
-    return [mid for mid, _ in info.fallback_models]
-
-
-def _select_initial_model(info: ProviderSetupInfo, values: list[str]) -> str:
-    """Pick the model entry that matches env or the provider's default.
-
-    Args:
-        info: Provider setup metadata.
-        values: ``_model_dropdown_values`` for the provider.
-
-    Returns:
-        The combobox display string to preselect, or ``""`` if the fallback
-        list is empty.
-    """
-    stored = os.getenv(info.model_env, "").strip() or info.default_model
-    if stored in values:
-        return stored
-    return values[0] if values else ""
-
-
 class _SetupController:
     """Glue between the dialog widgets and the validate/submit lifecycle.
 
@@ -269,8 +118,8 @@ class _SetupController:
         """Wire up handlers and seed the dialog with values from ``.env``.
 
         Args:
-            dialog: Toplevel returned by :func:`_build_setup_widgets`' caller.
-            widgets: Widget/variable handles from :func:`_build_setup_widgets`.
+            dialog: Toplevel returned by :func:`build_setup_widgets`' caller.
+            widgets: Widget/variable handles from :func:`build_setup_widgets`.
         """
         self._dialog = dialog
         self._widgets = widgets
@@ -279,12 +128,18 @@ class _SetupController:
             label: pid for pid, label in AVAILABLE_PROVIDERS
         }
         # (provider, key) tuple of the most recent successful live model fetch,
-        # used to avoid re-querying the API on every focus change.
+        # used to avoid re-querying the API on every keystroke / focus change.
         self._last_models_fetch: tuple[ProviderName, str] | None = None
+        # ``after`` id of a pending debounced model fetch, or ``None`` when
+        # idle. Cancelled and re-scheduled on every keystroke / paste in the
+        # API key entry so we only hit the network once the user pauses.
+        self._api_debounce_id: str | None = None
 
         widgets["provider_combo"].bind("<<ComboboxSelected>>", self._on_provider_change)
         widgets["model_combo"].bind("<<ComboboxSelected>>", self._on_model_change)
         widgets["api_entry"].bind("<FocusOut>", self._on_api_key_blur)
+        widgets["api_var"].trace_add("write", lambda *_: self._on_api_key_typed())
+        widgets["verify_btn"].configure(command=self._on_verify_clicked)
         widgets["ok_btn"].configure(command=self._attempt_submit)
         widgets["cancel_btn"].configure(command=self._cancel)
         dialog.protocol("WM_DELETE_WINDOW", self._cancel)
@@ -304,10 +159,18 @@ class _SetupController:
         return self._result
 
     def _show_api_row(self, info: ProviderSetupInfo) -> None:
-        """Reveal the API key row and prefill it from ``.env`` if present."""
+        """Reveal the API key row, hint, and Verify button; prefill from ``.env``.
+
+        Args:
+            info: Provider setup metadata used to label the key field and to
+                locate the matching env var to prefill.
+        """
         self._widgets["api_label"].configure(text=f"{info.key_label}:")
         self._widgets["api_label"].grid(row=3, column=0, sticky="w", pady=6, padx=(16, 12))
-        self._widgets["api_entry"].grid(row=3, column=1, sticky="ew", pady=6, padx=(0, 16), ipady=6)
+        self._widgets["api_row"].grid(row=3, column=1, sticky="ew", pady=6, padx=(0, 16))
+        self._widgets["api_hint"].grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=(0, 6), padx=16
+        )
         self._widgets["api_var"].set(os.getenv(info.api_key_env, "").strip())
 
     def _on_provider_change(self, _event: object = None) -> None:
@@ -317,9 +180,9 @@ class _SetupController:
             return
         info = provider_info(pid)
         self._show_api_row(info)
-        values = _model_dropdown_values(info)
+        values = model_dropdown_values(info)
         self._widgets["model_combo"].configure(values=values, state="readonly")
-        self._widgets["model_var"].set(_select_initial_model(info, values))
+        self._widgets["model_var"].set(select_initial_model(info, values))
         self._refresh_thinking_dropdown(pid)
         self._widgets["status_var"].set("")
         self._last_models_fetch = None
@@ -333,8 +196,74 @@ class _SetupController:
         self._refresh_thinking_dropdown(pid)
 
     def _on_api_key_blur(self, _event: object = None) -> None:
-        """Refresh the live model list when the API key field loses focus."""
+        """Fire any pending debounced fetch immediately when the entry loses focus."""
+        self._cancel_api_debounce()
         self._maybe_refresh_models()
+
+    def _on_api_key_typed(self) -> None:
+        """Schedule a debounced live model fetch after the user pauses typing.
+
+        Bound to the ``api_var`` ``write`` trace so it also covers paste,
+        ``set()`` from :meth:`_show_api_row`, and any other programmatic
+        change. The 600ms window keeps us off the network during a fast
+        paste of a long key, but feels instant after the user stops typing.
+        Any previously shown verify indicator is cleared because the key
+        the user typed now no longer matches what was last verified.
+        """
+        self._set_verify_indicator("clear")
+        self._cancel_api_debounce()
+        self._api_debounce_id = self._dialog.after(600, self._fire_debounced_fetch)
+
+    def _cancel_api_debounce(self) -> None:
+        """Cancel a pending debounced fetch if one is queued."""
+        if self._api_debounce_id is not None:
+            self._dialog.after_cancel(self._api_debounce_id)
+            self._api_debounce_id = None
+
+    def _fire_debounced_fetch(self) -> None:
+        """Tk ``after`` callback that runs the debounced model fetch."""
+        self._api_debounce_id = None
+        self._maybe_refresh_models()
+
+    def _on_verify_clicked(self) -> None:
+        """Verify the API key right now and reload the model list.
+
+        Bypasses the typing debounce and the ``_last_models_fetch`` cache so
+        the request runs even when the field has not changed since the last
+        successful fetch. Surfaces an inline status message if the form is
+        not ready (missing provider or empty key). The ✓/✗ indicator next
+        to the button is cleared until the fetch returns.
+        """
+        self._cancel_api_debounce()
+        self._set_verify_indicator("clear")
+        pid = self._label_to_id.get(self._widgets["provider_var"].get())
+        if pid is None:
+            self._widgets["status_var"].set("Please choose a provider first.")
+            return
+        if not self._widgets["api_var"].get().strip():
+            self._widgets["status_var"].set("Please enter an API key first.")
+            return
+        self._last_models_fetch = None
+        self._maybe_refresh_models()
+
+    def _set_verify_indicator(self, state: str) -> None:
+        """Update the small ✓/✗ marker next to the Verify button.
+
+        Args:
+            state: ``"ok"`` for a green check, ``"fail"`` for a red cross, or
+                any other value (typically ``""`` or ``"clear"``) to hide it.
+        """
+        var = self._widgets["verify_status_var"]
+        indicator = self._widgets["verify_indicator"]
+        if state == "ok":
+            var.set("\u2713")
+            indicator.configure(fg=SUCCESS)
+        elif state == "fail":
+            var.set("\u2717")
+            indicator.configure(fg=DANGER)
+        else:
+            var.set("")
+            indicator.configure(fg=MUTED)
 
     def _maybe_refresh_models(self) -> None:
         """Start a live model fetch if provider + non-empty key changed since last."""
@@ -370,9 +299,10 @@ class _SetupController:
         """Apply the fetched live model list to the dropdown on the Tk thread.
 
         Stale results (provider or key changed while the fetch was in flight)
-        are ignored. Failed fetches are silent — the fallback list stays in
-        place and the user can still submit; the final OK click re-validates
-        the key and surfaces any error there.
+        are ignored. When the fetch fails, the error is shown in the dialog
+        status line so the user can see why the dropdown still holds the
+        fallback list (e.g. a network/SSL problem or a permissions issue
+        with the vendor's ``/models`` endpoint).
 
         Args:
             pid: Provider id the fetch was started for.
@@ -384,10 +314,18 @@ class _SetupController:
         current_key = self._widgets["api_var"].get().strip()
         if pid != current_pid or api_key != current_key:
             return
+        if error:
+            self._widgets["status_var"].set(error)
+            self._set_verify_indicator("fail")
+            return
+        if not models:
+            if self._widgets["status_var"].get() == "Loading available models…":
+                self._widgets["status_var"].set("")
+            self._set_verify_indicator("fail")
+            return
         if self._widgets["status_var"].get() == "Loading available models…":
             self._widgets["status_var"].set("")
-        if error or not models:
-            return
+        self._set_verify_indicator("ok")
         self._last_models_fetch = (pid, api_key)
         info = provider_info(pid)
         values = [mid for mid, _ in models]
@@ -396,7 +334,7 @@ class _SetupController:
         if current_entry in values:
             self._widgets["model_var"].set(current_entry)
         else:
-            self._widgets["model_var"].set(_select_initial_model(info, values))
+            self._widgets["model_var"].set(select_initial_model(info, values))
         self._refresh_thinking_dropdown(pid)
 
     def _refresh_thinking_dropdown(self, pid: ProviderName) -> None:
@@ -410,7 +348,7 @@ class _SetupController:
             pid: Active provider id.
         """
         model_id = self._widgets["model_var"].get().strip()
-        menu = _thinking_menu_for(pid, model_id)
+        menu = thinking_menu_for(pid, model_id)
         previous = self._widgets["thinking_var"].get().strip().lower()
         allowed = {value for value, _ in menu}
         preferred = previous if previous in allowed else (
@@ -420,7 +358,7 @@ class _SetupController:
             values=[value for value, _ in menu],
             state="readonly",
         )
-        self._widgets["thinking_var"].set(_thinking_display_entry(menu, preferred))
+        self._widgets["thinking_var"].set(thinking_display_entry(menu, preferred))
 
     def _set_form_state(self, enabled: bool) -> None:
         """Enable or disable all interactive widgets during validation."""
@@ -431,6 +369,7 @@ class _SetupController:
         model_combo.configure(state=combo_state if model_combo.cget("values") else "disabled")
         thinking_combo.configure(state=combo_state if thinking_combo.cget("values") else "disabled")
         self._widgets["api_entry"].configure(state="normal" if enabled else "disabled")
+        self._widgets["verify_btn"].configure(state="normal" if enabled else "disabled")
         self._widgets["ok_btn"].configure(state="normal" if enabled else "disabled")
         self._widgets["cancel_btn"].configure(state="normal" if enabled else "disabled")
 
@@ -528,7 +467,7 @@ def run_setup_dialog(root: tk.Tk) -> SetupResult | None:
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    widgets = _build_setup_widgets(dialog)
+    widgets = build_setup_widgets(dialog)
     controller = _SetupController(dialog, widgets)
     widgets["provider_combo"].focus_set()
     root.wait_window(dialog)

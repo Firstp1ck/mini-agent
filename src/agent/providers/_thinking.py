@@ -33,55 +33,94 @@ VALID_LEVELS: tuple[ThinkingLevel, ...] = (
     "xhigh",
 )
 
-# Claude model ids that accept ``thinking={"type": "adaptive"}``. See
-# https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
-_ADAPTIVE_CLAUDE_PREFIXES: tuple[str, ...] = (
+# Per-model thinking-mode classification. Sources (verified Nov 2025):
+# - https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+# - https://platform.claude.com/docs/en/build-with-claude/effort
+# - https://platform.claude.com/docs/en/about-claude/models/extended-thinking-models
+# - https://developers.openai.com/docs/guides/reasoning
+#
+# Anthropic modes:
+#  * ``adaptive_xhigh`` - adaptive thinking accepted, plus the ``xhigh`` effort
+#    tier (Opus 4.7 only; manual ``type:"enabled"`` is rejected).
+#  * ``adaptive``        - adaptive thinking accepted, effort up to ``max``
+#    (Opus 4.6, Sonnet 4.6, Mythos Preview).
+#  * ``manual``          - manual extended thinking via
+#    ``type:"enabled" + budget_tokens``; the level dropdown maps to a budget
+#    (Sonnet 4.5, Haiku 4.5, Opus 4.5 and older Claude 3.x models).
+#  * ``none``            - never matched for Claude (every current Claude
+#    accepts at least manual thinking); kept for the unknown-id fallback.
+_ANTHROPIC_ADAPTIVE_XHIGH_PREFIXES: tuple[str, ...] = (
     "claude-opus-4-7",
+)
+_ANTHROPIC_ADAPTIVE_PREFIXES: tuple[str, ...] = (
     "claude-opus-4-6",
     "claude-sonnet-4-6",
     "claude-mythos",
+)
+
+# OpenAI reasoning-capable model id prefixes. GPT-4 / gpt-3.5 / chatgpt-* are
+# chat models and reject the ``reasoning`` parameter, so they only show
+# ``auto`` / ``off`` in the picker.
+_OPENAI_REASONING_PREFIXES: tuple[str, ...] = (
+    "gpt-5",
+    "o1",
+    "o3",
+    "o4",
+    "o5",
 )
 
 # Values offered on first-run setup (saved to ``MINI_AGENT_THINKING``).
 SETUP_THINKING_MENU: list[tuple[str, str]] = [
     ("auto", "API default (recommended)"),
-    ("off", "Off — no Claude extended thinking; minimal GPT reasoning"),
+    ("off", "Off — no extended thinking / minimal reasoning"),
     ("low", "Low"),
     ("medium", "Medium"),
     ("high", "High"),
-    ("max", "Max — deepest adaptive effort on Claude; maps to xhigh on GPT"),
-    ("xhigh", "xHigh — deepest reasoning on GPT where supported"),
+    ("max", "Max — deepest effort on supported Claude / xhigh on GPT"),
+    ("xhigh", "xHigh — Claude Opus 4.7 / GPT-5 family only"),
 ]
 
-# Per-model effort support (May 2026). See:
-# - https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
-# - https://developers.openai.com/api/docs/guides/reasoning
-#
-# Claude Opus 4.7 is the only model that accepts ``xhigh``; Opus 4.6 / Sonnet
-# 4.6 / Mythos accept the adaptive set without ``xhigh``. Older Claude models
-# don't accept adaptive thinking at all (only ``auto`` and ``off`` mean
-# anything for them).
-_ANTHROPIC_OPUS_4_7_PREFIX = "claude-opus-4-7"
-_ANTHROPIC_ADAPTIVE_NO_XHIGH_PREFIXES: tuple[str, ...] = (
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-mythos",
-)
 
-# GPT-5.4 and GPT-5.5 model pages confirm: none, low, medium, high, xhigh.
-_OPENAI_FULL_EFFORT_PREFIXES: tuple[str, ...] = (
-    "gpt-5.5",
-    "gpt-5.4",
-)
+def anthropic_thinking_mode(model_id: str) -> str:
+    """Classify the thinking shape this Claude model accepts.
+
+    Args:
+        model_id: Anthropic model identifier (for example
+            ``"claude-haiku-4-5"`` or ``"claude-opus-4-7-20251015"``).
+
+    Returns:
+        One of ``"adaptive_xhigh"``, ``"adaptive"``, ``"manual"``, or
+        ``"none"`` (defensive default for unknown ids; treat as manual).
+    """
+    if any(model_id.startswith(p) for p in _ANTHROPIC_ADAPTIVE_XHIGH_PREFIXES):
+        return "adaptive_xhigh"
+    if any(model_id.startswith(p) for p in _ANTHROPIC_ADAPTIVE_PREFIXES):
+        return "adaptive"
+    if model_id.startswith("claude-"):
+        return "manual"
+    return "none"
+
+
+def is_openai_reasoning_model(model_id: str) -> bool:
+    """Return whether ``model_id`` accepts the ``reasoning`` request parameter.
+
+    Args:
+        model_id: OpenAI model identifier.
+
+    Returns:
+        ``True`` for GPT-5 family and o-series reasoning models, ``False`` for
+        chat models like ``gpt-4o`` / ``gpt-4*`` / ``chatgpt-*`` / ``gpt-3.5*``.
+    """
+    return any(model_id.startswith(p) for p in _OPENAI_REASONING_PREFIXES)
 
 
 def available_thinking_levels(provider_id: str, model_id: str) -> list[str]:
     """Return the ``SETUP_THINKING_MENU`` values supported by this model.
 
     The result always starts with ``"auto"`` and ``"off"``; provider/model
-    specific effort levels are appended in menu order. Unknown providers or
-    models get the full set so the user can still try a value (the API will
-    reject anything the model truly does not support).
+    specific effort levels are appended in menu order. Unknown providers fall
+    through to the full effort set so the user can still try a value (the
+    API will reject anything the model truly does not support).
 
     Args:
         provider_id: ``"anthropic"`` or ``"openai"`` (case-insensitive).
@@ -97,16 +136,19 @@ def available_thinking_levels(provider_id: str, model_id: str) -> list[str]:
 
     pid = provider_id.strip().lower()
     if pid == "anthropic":
-        if model_id.startswith(_ANTHROPIC_OPUS_4_7_PREFIX):
+        mode = anthropic_thinking_mode(model_id)
+        if mode == "adaptive_xhigh":
             return base + extras_full
-        if any(model_id.startswith(prefix) for prefix in _ANTHROPIC_ADAPTIVE_NO_XHIGH_PREFIXES):
+        if mode == "adaptive":
+            return base + extras_no_xhigh
+        if mode == "manual":
             return base + extras_no_xhigh
         return base
 
     if pid == "openai":
-        if any(model_id.startswith(prefix) for prefix in _OPENAI_FULL_EFFORT_PREFIXES):
+        if is_openai_reasoning_model(model_id):
             return base + extras_full
-        return base + extras_full
+        return base
 
     return base + extras_full
 
@@ -132,9 +174,10 @@ def model_supports_adaptive_thinking(model_id: str) -> bool:
         model_id: Anthropic model identifier.
 
     Returns:
-        ``True`` if ``thinking={"type": "adaptive"}`` is valid for this model.
+        ``True`` if ``thinking={"type": "adaptive"}`` is valid for this model
+        (Opus 4.7, Opus 4.6, Sonnet 4.6, Mythos Preview).
     """
-    return any(model_id.startswith(prefix) for prefix in _ADAPTIVE_CLAUDE_PREFIXES)
+    return anthropic_thinking_mode(model_id) in {"adaptive", "adaptive_xhigh"}
 
 
 def thinking_env_needs_prompt() -> bool:
@@ -244,8 +287,10 @@ __all__ = [
     "SETUP_THINKING_MENU",
     "ThinkingLevel",
     "VALID_LEVELS",
+    "anthropic_thinking_mode",
     "available_thinking_levels",
     "filter_thinking_menu",
+    "is_openai_reasoning_model",
     "model_supports_adaptive_thinking",
     "prompt_thinking_level_cli",
     "resolved_thinking_level",

@@ -50,6 +50,8 @@ class ShellWidgets:
     """References to the main chat shell widgets after :func:`build_chat_shell`."""
 
     shell: tk.Frame
+    header: tk.Frame
+    settings: tk.Button
     transcript: scrolledtext.ScrolledText
     composer: tk.Frame
     entry: tk.Entry
@@ -72,6 +74,24 @@ def build_chat_shell(root: tk.Tk) -> ShellWidgets:
     """
     shell = tk.Frame(root, bg=SHELL_BG)
     shell.pack(fill="both", expand=True)
+
+    header = tk.Frame(shell, bg=SHELL_BG)
+    settings = tk.Button(
+        header,
+        text="\u2699",
+        bd=0,
+        relief=tk.FLAT,
+        padx=10,
+        pady=2,
+        cursor="hand2",
+        font=ui_font(14),
+        bg=SHELL_BG,
+        fg=MUTED,
+        activebackground=DIVIDER,
+        activeforeground=CHAT_FG,
+        disabledforeground="#cbd5e1",
+        highlightthickness=0,
+    )
 
     transcript = scrolledtext.ScrolledText(
         shell,
@@ -145,6 +165,9 @@ def build_chat_shell(root: tk.Tk) -> ShellWidgets:
         font=ui_font(9),
     )
 
+    header.pack(side=tk.TOP, fill=tk.X)
+    settings.pack(side=tk.RIGHT, padx=10, pady=6)
+
     composer.pack(side=tk.BOTTOM, fill=tk.X)
     transcript.pack(fill="both", expand=True, padx=0, pady=0)
 
@@ -156,6 +179,8 @@ def build_chat_shell(root: tk.Tk) -> ShellWidgets:
 
     return ShellWidgets(
         shell=shell,
+        header=header,
+        settings=settings,
         transcript=transcript,
         composer=composer,
         entry=entry,

@@ -51,10 +51,15 @@ class MiniAgentApp:
         self._entry = self._widgets.entry
         self._send = self._widgets.send
         self._status = self._widgets.status
+        self._settings = self._widgets.settings
 
         self._send.configure(command=self._on_send)
         self._send.bind("<Enter>", self._on_send_pointer_enter)
         self._send.bind("<Leave>", self._on_send_pointer_leave)
+
+        self._settings.configure(command=self._on_open_settings)
+        self._settings.bind("<Enter>", self._on_settings_pointer_enter)
+        self._settings.bind("<Leave>", self._on_settings_pointer_leave)
 
         self._conversation: list[dict[str, str]] | None = None
         self._provider: Provider | None = None
@@ -78,6 +83,45 @@ class MiniAgentApp:
     def _on_send_pointer_leave(self, _event: object) -> None:
         """Restore the Send button color when the pointer leaves."""
         self._send.configure(bg=ACCENT)
+
+    def _on_settings_pointer_enter(self, _event: object) -> None:
+        """Highlight the settings gear while the pointer is over it (when enabled)."""
+        if self._settings.cget("state") == tk.NORMAL:
+            self._settings.configure(fg=CHAT_FG)
+
+    def _on_settings_pointer_leave(self, _event: object) -> None:
+        """Restore the muted gear color when the pointer leaves."""
+        self._settings.configure(fg=MUTED)
+
+    def _on_open_settings(self) -> None:
+        """Reopen the setup dialog mid-session to change provider/model/thinking.
+
+        Cancelling leaves the current session untouched. Applying writes the
+        new values to ``.env`` and starts a fresh chat session (new system
+        prompt, new conversation) under the chosen provider. The previous
+        transcript stays visible so the user has context, separated by a
+        banner. The button is a no-op while a turn is in flight or before
+        the initial session has finished booting.
+        """
+        if self._busy or self._provider is None:
+            return
+        result = run_setup_dialog(self._root)
+        if result is None:
+            return
+        apply_setup_result(result)
+        self._conversation = None
+        self._provider = None
+        self._injected_guide_paths = None
+        self._set_ui_enabled(False)
+        self._set_status("Applying new settings…")
+        self._transcript_panel.append_system_banner(
+            "Settings updated. Starting a new session with the new configuration…"
+        )
+        threading.Thread(
+            target=self._bootstrap_worker,
+            args=(result.provider,),
+            daemon=True,
+        ).start()
 
     def _set_ui_enabled(self, enabled: bool) -> None:
         """Enable or disable message entry while a request is in flight.

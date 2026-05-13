@@ -15,7 +15,11 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from agent.providers._shared import choose_model, prompt_api_key, write_env_value
-from agent.providers._thinking import ThinkingLevel, resolved_thinking_level
+from agent.providers._thinking import (
+    ThinkingLevel,
+    is_openai_reasoning_model,
+    resolved_thinking_level,
+)
 from agent.providers.base import Provider
 
 DEFAULT_MODEL = "gpt-5.5"
@@ -48,18 +52,28 @@ _EFFORT_FOR_LEVEL: dict[ThinkingLevel, str] = {
 }
 
 
-def _reasoning_request_kwargs(level: ThinkingLevel | None) -> dict[str, Any]:
+def _reasoning_request_kwargs(
+    model_id: str, level: ThinkingLevel | None
+) -> dict[str, Any]:
     """Translate the shared thinking level into Responses API kwargs.
 
+    Only reasoning-capable models (GPT-5 family + o-series) accept the
+    ``reasoning`` parameter; chat models like ``gpt-4o`` reject it. For
+    those we always return an empty mapping so the request shape stays
+    valid regardless of the configured ``MINI_AGENT_THINKING`` value.
+
     Args:
+        model_id: Model id the request will target.
         level: Resolved ``MINI_AGENT_THINKING`` level, or ``None`` for the
             provider's API default (``medium`` on ``gpt-5.5``; other models
             pick their own).
 
     Returns:
-        Kwargs to splat into ``responses.create``. Empty when no override is
-        configured so the API default applies untouched.
+        Kwargs to splat into ``responses.create``. Empty when the model has
+        no reasoning support or when no override is configured.
     """
+    if not is_openai_reasoning_model(model_id):
+        return {}
     if level is None:
         return {}
     return {"reasoning": {"effort": _EFFORT_FOR_LEVEL[level]}}
@@ -229,7 +243,7 @@ class OpenAIProvider(Provider):
             {"role": message["role"], "content": message["content"]}
             for message in conversation[1:]
         ]
-        reasoning_kwargs = _reasoning_request_kwargs(resolved_thinking_level())
+        reasoning_kwargs = _reasoning_request_kwargs(self.model, resolved_thinking_level())
 
         try:
             response = self._client.responses.create(

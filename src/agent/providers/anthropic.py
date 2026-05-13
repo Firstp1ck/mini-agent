@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from agent.providers._shared import choose_model, prompt_api_key, write_env_value
 from agent.providers._thinking import (
     ThinkingLevel,
-    model_supports_adaptive_thinking,
+    anthropic_thinking_mode,
     resolved_thinking_level,
 )
 from agent.providers.base import Provider
@@ -27,9 +27,23 @@ FALLBACK_MODELS: list[tuple[str, str]] = [
 _KEY_LABEL = "Anthropic API key"
 
 # When thinking is enabled, ``max_tokens`` covers thinking + visible reply, so
-# the 2000-token cap used for plain text replies is far too small.
+# the 2000-token cap used for plain text replies is far too small. The manual
+# (``budget_tokens``) path requires ``budget_tokens < max_tokens``; the cap
+# below leaves room for the visible reply on top of the largest budget.
 _MAX_TOKENS_DEFAULT = 2000
-_MAX_TOKENS_WITH_THINKING = 16000
+_MAX_TOKENS_WITH_THINKING = 20000
+
+# Map shared thinking levels to ``budget_tokens`` values used by the manual
+# ``type:"enabled"`` shape (older Claude families that don't accept adaptive
+# thinking). Values are conservative and stay below ``_MAX_TOKENS_WITH_THINKING``
+# so ``budget_tokens < max_tokens`` always holds.
+_BUDGET_FOR_LEVEL: dict[ThinkingLevel, int] = {
+    "low": 2048,
+    "medium": 4096,
+    "high": 8192,
+    "max": 12288,
+    "xhigh": 12288,
+}
 
 
 def _thinking_request_kwargs(
@@ -37,9 +51,18 @@ def _thinking_request_kwargs(
 ) -> dict[str, Any]:
     """Translate the shared thinking level into Messages API kwargs.
 
+    The shape depends on the model's classification from
+    :func:`anthropic_thinking_mode`:
+
+    * ``adaptive_xhigh`` / ``adaptive`` — pass ``thinking={"type": "adaptive"}``
+      and, for an explicit level, ``output_config={"effort": level}``.
+    * ``manual`` — pass ``thinking={"type": "enabled", "budget_tokens": N}``
+      using :data:`_BUDGET_FOR_LEVEL`. ``auto`` / ``None`` leaves thinking off
+      because manual extended thinking is opt-in on those models.
+    * Anything else — no thinking config (defensive default).
+
     Args:
-        model_id: Model that will receive the request. Used to decide whether
-            adaptive thinking is even available.
+        model_id: Model that will receive the request.
         level: Resolved ``MINI_AGENT_THINKING`` level, or ``None`` for the
             provider's API default.
 
@@ -49,14 +72,20 @@ def _thinking_request_kwargs(
     """
     if level == "off":
         return {}
-    if not model_supports_adaptive_thinking(model_id):
-        return {}
-    if level is None:
-        return {"thinking": {"type": "adaptive"}}
-    return {
-        "thinking": {"type": "adaptive"},
-        "output_config": {"effort": level},
-    }
+    mode = anthropic_thinking_mode(model_id)
+    if mode in {"adaptive", "adaptive_xhigh"}:
+        if level is None:
+            return {"thinking": {"type": "adaptive"}}
+        return {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": level},
+        }
+    if mode == "manual":
+        if level is None:
+            return {}
+        budget = _BUDGET_FOR_LEVEL.get(level, _BUDGET_FOR_LEVEL["medium"])
+        return {"thinking": {"type": "enabled", "budget_tokens": budget}}
+    return {}
 
 
 def _first_text_block(content: list[Any]) -> str:

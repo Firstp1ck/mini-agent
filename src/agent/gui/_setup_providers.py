@@ -117,10 +117,11 @@ def fetch_live_models(
 ) -> tuple[list[tuple[str, str]], str]:
     """Verify ``api_key`` and return the provider's full model list.
 
-    Both calls run on the calling thread; invoke this from a worker so the Tk
-    main loop stays responsive. The list comes from the provider's
-    ``models.list`` endpoint (Anthropic up to 100; OpenAI returns all chat
-    models, filtered to GPT/o-series ids).
+    Unlike the CLI's lenient ``_list_models`` helpers (which silently fall
+    back to a hardcoded short list when anything goes wrong), this function
+    propagates the real error message so the setup dialog can show the user
+    why the list could not be refreshed. The list comes from the provider's
+    ``models.list`` endpoint and is fully auto-paginated.
 
     Args:
         provider_name: Active provider id.
@@ -128,39 +129,99 @@ def fetch_live_models(
 
     Returns:
         ``(models, error)``. ``models`` is an empty list on failure;
-        ``error`` is empty on success.
+        ``error`` is empty on success and contains a human-readable reason
+        otherwise.
     """
     if provider_name == "anthropic":
-        import anthropic
-
-        from agent.providers.anthropic import _list_models, _validate_key
-
-        try:
-            client = _validate_key(api_key)
-        except anthropic.AuthenticationError:
-            return [], "Anthropic rejected this API key."
-        except anthropic.APIConnectionError as exc:
-            return [], f"Could not reach Anthropic: {exc}"
-        except anthropic.APIError as exc:
-            return [], f"Anthropic API error: {exc}"
-        return _list_models(client), ""
-
+        return _fetch_anthropic_models(api_key)
     if provider_name == "openai":
-        import openai
-
-        from agent.providers.openai import _list_models, _validate_key
-
-        try:
-            client = _validate_key(api_key)
-        except openai.AuthenticationError:
-            return [], "OpenAI rejected this API key."
-        except openai.APIConnectionError as exc:
-            return [], f"Could not reach OpenAI: {exc}"
-        except openai.APIError as exc:
-            return [], f"OpenAI API error: {exc}"
-        return _list_models(client), ""
-
+        return _fetch_openai_models(api_key)
     return [], f"Unknown provider: {provider_name!r}"
+
+
+def _fetch_anthropic_models(api_key: str) -> tuple[list[tuple[str, str]], str]:
+    """Validate the key and return every Claude model on the account.
+
+    Iterates the auto-paginating ``client.models.list()`` so accounts with
+    more than one page of models still show every entry, not just the first.
+
+    Args:
+        api_key: Anthropic API key string.
+
+    Returns:
+        ``(models, error)`` tuple as documented on :func:`fetch_live_models`.
+    """
+    import anthropic
+
+    from agent.providers.anthropic import _validate_key
+
+    try:
+        client = _validate_key(api_key)
+    except anthropic.AuthenticationError:
+        return [], "Anthropic rejected this API key."
+    except anthropic.APIConnectionError as exc:
+        return [], f"Could not reach Anthropic: {exc}"
+    except anthropic.APIError as exc:
+        return [], f"Anthropic API error: {exc}"
+
+    try:
+        models: list[tuple[str, str]] = []
+        for model in client.models.list(limit=1000):
+            model_id = getattr(model, "id", "")
+            display = getattr(model, "display_name", model_id) or model_id
+            if model_id.startswith("claude-"):
+                models.append((model_id, display))
+    except anthropic.APIError as exc:
+        return [], f"Could not list Anthropic models: {exc}"
+    except Exception as exc:  # noqa: BLE001 - surface SDK / parsing issues to UI
+        return [], f"Could not list Anthropic models: {exc}"
+
+    if not models:
+        return [], "Anthropic returned no Claude models for this account."
+    return models, ""
+
+
+def _fetch_openai_models(api_key: str) -> tuple[list[tuple[str, str]], str]:
+    """Validate the key and return every chat-capable OpenAI model.
+
+    Iterates the auto-paginating ``client.models.list()`` and applies the
+    same ``_is_chat_model`` filter used by the CLI helper, so the dialog
+    shows GPT / o-series ids only.
+
+    Args:
+        api_key: OpenAI API key string.
+
+    Returns:
+        ``(models, error)`` tuple as documented on :func:`fetch_live_models`.
+    """
+    import openai
+
+    from agent.providers.openai import _is_chat_model, _validate_key
+
+    try:
+        client = _validate_key(api_key)
+    except openai.AuthenticationError:
+        return [], "OpenAI rejected this API key."
+    except openai.APIConnectionError as exc:
+        return [], f"Could not reach OpenAI: {exc}"
+    except openai.APIError as exc:
+        return [], f"OpenAI API error: {exc}"
+
+    try:
+        models: list[tuple[str, str]] = []
+        for model in client.models.list():
+            model_id = getattr(model, "id", "")
+            if model_id and _is_chat_model(model_id):
+                models.append((model_id, model_id))
+    except openai.APIError as exc:
+        return [], f"Could not list OpenAI models: {exc}"
+    except Exception as exc:  # noqa: BLE001 - surface SDK / parsing issues to UI
+        return [], f"Could not list OpenAI models: {exc}"
+
+    models.sort(key=lambda pair: pair[0])
+    if not models:
+        return [], "OpenAI returned no chat-capable models for this account."
+    return models, ""
 
 
 __all__ = [
