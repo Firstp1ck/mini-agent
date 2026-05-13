@@ -26,11 +26,34 @@ On first run the agent prompts you to:
 2. **Enter the API key** for that provider (`ANTHROPIC_API_KEY` or
    `OPENAI_API_KEY`).
 3. **Pick a default model**, saved as `ANTHROPIC_MODEL` or `OPENAI_MODEL`.
+4. **Pick a thinking / reasoning level**, saved as `MINI_AGENT_THINKING`
+   (skipped if that variable is already set in `.env`).
 
 Subsequent runs read everything from `.env` and skip the prompts. To switch
 providers later, change `MINI_AGENT_PROVIDER` in `.env` (or unset it to be
 asked again). See [`.env.example`](.env.example) for the full set of
 variables.
+
+### Thinking / reasoning effort
+
+Set `MINI_AGENT_THINKING` to control how hard the model thinks before
+replying:
+
+| Value | Anthropic (Claude) | OpenAI (GPT-5 family) |
+|-------|--------------------|-----------------------|
+| `auto` / unset | adaptive thinking, default effort `high` on Opus 4.7 / Opus 4.6 / Sonnet 4.6 (silently off on older models) | API default (`medium` on `gpt-5.5`) |
+| `off` | no extended thinking | `reasoning.effort=none` |
+| `low` / `medium` / `high` | adaptive thinking with that effort | `reasoning.effort` set to the same level |
+| `max` / `xhigh` | deepest adaptive effort available on the model | `reasoning.effort=xhigh` |
+
+The setup picker (both CLI and GUI) only offers the values that the chosen
+provider **and** specific model accept (per the live provider docs as of
+May 2026):
+
+- **Claude Opus 4.7** — `auto, off, low, medium, high, max, xhigh`
+- **Claude Opus 4.6 / Sonnet 4.6 / Mythos** — `auto, off, low, medium, high, max`
+- **Older Claude** (`sonnet-4-5`, `haiku-4-5`, ...) — `auto, off` only (no adaptive thinking)
+- **GPT-5.4 / GPT-5.5 family** — `auto, off, low, medium, high, max, xhigh`
 
 To leave the session: **Ctrl-C** always works. On **Unix/macOS**, **Ctrl-D**
 sends end-of-file. On **Windows**, **Ctrl-Z** then **Enter** for EOF (Ctrl-D is not EOF and may show as ``^D``).

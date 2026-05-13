@@ -9,6 +9,7 @@ exchange messages. All vendor-specific behavior lives under
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -23,6 +24,7 @@ from agent.prompt import (
     system_prompt,
 )
 from agent.providers import Provider, build_provider, resolved_llm_provider
+from agent.providers._thinking import prompt_thinking_level_cli
 from agent.tools import TOOL_REGISTRY, work_directories_for_tool
 
 YOU_COLOR = "\033[94m"
@@ -162,11 +164,14 @@ def drive_agent_turn(
 def run_agent() -> None:
     """Run the interactive REPL: read user input, call the model, run tools.
 
-    Loads ``.env``, selects and configures a provider, then alternates between
-    assistant replies and tool execution until a non-tool response is printed.
+    Loads ``.env``, selects and configures a provider, prompts for a thinking
+    level on first run when ``MINI_AGENT_THINKING`` is unset, then alternates
+    between assistant replies and tool execution until a non-tool response is
+    printed.
     """
     load_dotenv(Path.cwd() / ".env", override=False)
     provider = build_provider(resolved_llm_provider())
+    prompt_thinking_level_cli(provider.name, provider.model)
     injected_guide_paths: set[str] = set()
     initial_suffix, _ = format_new_guide_sections(
         collect_guide_paths_walking_up(Path.cwd()), injected_guide_paths
@@ -175,7 +180,11 @@ def run_agent() -> None:
         {"role": "system", "content": system_prompt() + initial_suffix}
     ]
 
-    print(f"Mini Agent using {provider.name} ({provider.model}) in {Path.cwd()}.")
+    thinking = os.getenv("MINI_AGENT_THINKING", "").strip() or "auto"
+    print(
+        f"Mini Agent using {provider.name} ({provider.model}), "
+        f"thinking={thinking}, in {Path.cwd()}."
+    )
     print(_repl_exit_hint())
     while True:
         try:

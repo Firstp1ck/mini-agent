@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import anthropic
 from dotenv import load_dotenv
 
 from agent.providers._shared import choose_model, prompt_api_key, write_env_value
+from agent.providers._thinking import (
+    ThinkingLevel,
+    model_supports_adaptive_thinking,
+    resolved_thinking_level,
+)
 from agent.providers.base import Provider
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -19,6 +25,57 @@ FALLBACK_MODELS: list[tuple[str, str]] = [
 ]
 
 _KEY_LABEL = "Anthropic API key"
+
+# When thinking is enabled, ``max_tokens`` covers thinking + visible reply, so
+# the 2000-token cap used for plain text replies is far too small.
+_MAX_TOKENS_DEFAULT = 2000
+_MAX_TOKENS_WITH_THINKING = 16000
+
+
+def _thinking_request_kwargs(
+    model_id: str, level: ThinkingLevel | None
+) -> dict[str, Any]:
+    """Translate the shared thinking level into Messages API kwargs.
+
+    Args:
+        model_id: Model that will receive the request. Used to decide whether
+            adaptive thinking is even available.
+        level: Resolved ``MINI_AGENT_THINKING`` level, or ``None`` for the
+            provider's API default.
+
+    Returns:
+        Kwargs to splat into ``messages.create``. May be empty when thinking
+        is off or unsupported on this model.
+    """
+    if level == "off":
+        return {}
+    if not model_supports_adaptive_thinking(model_id):
+        return {}
+    if level is None:
+        return {"thinking": {"type": "adaptive"}}
+    return {
+        "thinking": {"type": "adaptive"},
+        "output_config": {"effort": level},
+    }
+
+
+def _first_text_block(content: list[Any]) -> str:
+    """Return the first ``text`` block's content, ignoring any thinking blocks.
+
+    Adaptive thinking responses may start with one or more ``thinking`` blocks
+    before the visible reply; ``content[0]`` is therefore not safe to use.
+
+    Args:
+        content: ``response.content`` list returned by the Messages API.
+
+    Returns:
+        Plain text of the first ``text`` block, or ``str(block)`` of the first
+        block when no text block is present (matches the previous behavior).
+    """
+    for block in content:
+        if getattr(block, "type", None) == "text":
+            return block.text
+    return str(content[0]) if content else ""
 
 
 def _validate_key(api_key: str) -> anthropic.Anthropic:
@@ -88,7 +145,7 @@ def _list_models(client: anthropic.Anthropic) -> list[tuple[str, str]]:
         ``(model_id, display_name)`` pairs, or ``FALLBACK_MODELS`` on failure.
     """
     try:
-        response = client.models.list(limit=20)
+        response = client.models.list(limit=100)
         models: list[tuple[str, str]] = []
         for model in getattr(response, "data", []):
             model_id = getattr(model, "id", "")
@@ -152,23 +209,33 @@ class AnthropicProvider(Provider):
     def call(self, conversation: list[dict[str, str]]) -> str:
         """Send the conversation to Claude and return the assistant text.
 
+        Extended thinking is configured via ``MINI_AGENT_THINKING``. When
+        adaptive thinking is enabled, the response may contain ``thinking``
+        blocks before the visible reply; we always return the first ``text``
+        block.
+
         Args:
             conversation: First entry is the system prompt; rest is the
                 user/assistant transcript.
 
         Returns:
-            Text content of the first response block, or ``str(block)`` if
-            the block is not plain text.
+            Text content of the first ``text`` block, or ``str(block)`` if no
+            text block is present.
 
         Raises:
             SystemExit: When the configured model id is not available.
         """
+        thinking_kwargs = _thinking_request_kwargs(self.model, resolved_thinking_level())
+        max_tokens = (
+            _MAX_TOKENS_WITH_THINKING if "thinking" in thinking_kwargs else _MAX_TOKENS_DEFAULT
+        )
         try:
             response = self._client.messages.create(
                 model=self.model,
-                max_tokens=2000,
+                max_tokens=max_tokens,
                 system=conversation[0]["content"],
                 messages=conversation[1:],
+                **thinking_kwargs,
             )
         except anthropic.NotFoundError as exc:
             raise SystemExit(
@@ -177,5 +244,4 @@ class AnthropicProvider(Provider):
                 f"or remove it to use the current default {DEFAULT_MODEL!r}."
             ) from exc
 
-        block = response.content[0]
-        return block.text if block.type == "text" else str(block)
+        return _first_text_block(response.content)

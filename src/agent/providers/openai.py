@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import openai
 from dotenv import load_dotenv
 from openai import OpenAI
 
 from agent.providers._shared import choose_model, prompt_api_key, write_env_value
+from agent.providers._thinking import ThinkingLevel, resolved_thinking_level
 from agent.providers.base import Provider
 
 DEFAULT_MODEL = "gpt-5.5"
@@ -24,6 +26,43 @@ FALLBACK_MODELS: list[tuple[str, str]] = [
 ]
 
 _KEY_LABEL = "OpenAI API key"
+
+# Reasoning models always reason. OpenAI recommends reserving at least 25k
+# tokens for reasoning + visible output, so the original 2000-token cap is
+# too small for the GPT-5 family. See
+# https://developers.openai.com/api/docs/guides/reasoning
+_MAX_OUTPUT_TOKENS = 25000
+
+# Map the shared knob onto effort values that exist for current reasoning
+# models. ``off`` maps to ``none``: the GPT-5.4 and GPT-5.5 model pages list
+# ``none`` as the lowest-effort option (``minimal`` from earlier docs was
+# replaced by ``none`` for these models). See:
+# https://developers.openai.com/api/docs/models/gpt-5.5
+_EFFORT_FOR_LEVEL: dict[ThinkingLevel, str] = {
+    "off": "none",
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "max": "xhigh",
+    "xhigh": "xhigh",
+}
+
+
+def _reasoning_request_kwargs(level: ThinkingLevel | None) -> dict[str, Any]:
+    """Translate the shared thinking level into Responses API kwargs.
+
+    Args:
+        level: Resolved ``MINI_AGENT_THINKING`` level, or ``None`` for the
+            provider's API default (``medium`` on ``gpt-5.5``; other models
+            pick their own).
+
+    Returns:
+        Kwargs to splat into ``responses.create``. Empty when no override is
+        configured so the API default applies untouched.
+    """
+    if level is None:
+        return {}
+    return {"reasoning": {"effort": _EFFORT_FOR_LEVEL[level]}}
 
 
 def _is_chat_model(model_id: str) -> bool:
@@ -170,7 +209,9 @@ class OpenAIProvider(Provider):
         """Send the conversation via the Responses API and return assistant text.
 
         The system prompt is passed as ``instructions``; the remaining turns
-        are forwarded as the ``input`` message array. Output is read via
+        are forwarded as the ``input`` message array. Reasoning effort is
+        configured via ``MINI_AGENT_THINKING``; unset leaves it to the API
+        default (``medium`` on ``gpt-5.5``). Output is read via
         ``response.output_text`` per current OpenAI guidance.
 
         Args:
@@ -188,13 +229,15 @@ class OpenAIProvider(Provider):
             {"role": message["role"], "content": message["content"]}
             for message in conversation[1:]
         ]
+        reasoning_kwargs = _reasoning_request_kwargs(resolved_thinking_level())
 
         try:
             response = self._client.responses.create(
                 model=self.model,
                 instructions=instructions,
                 input=input_messages,
-                max_output_tokens=2000,
+                max_output_tokens=_MAX_OUTPUT_TOKENS,
+                **reasoning_kwargs,
             )
         except openai.NotFoundError as exc:
             raise SystemExit(
