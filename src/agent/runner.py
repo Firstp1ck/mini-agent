@@ -16,6 +16,14 @@ RESET_COLOR = "\033[0m"
 
 
 def run_agent() -> None:
+    """Run the interactive REPL: read user input, call the model, run tools in a loop.
+
+    Loads API credentials and default model from config, then alternates between
+    assistant replies and tool execution until a non-tool response is printed.
+
+    Raises:
+        SystemExit: If the configured model id is not found for the account.
+    """
     client = ensure_anthropic_client()
     model = ensure_anthropic_model(client.models)
     conversation = [{"role": "system", "content": system_prompt()}]

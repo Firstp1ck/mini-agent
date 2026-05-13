@@ -22,10 +22,23 @@ Rules:
 
 
 def tool_description(tool_name: str) -> str:
+    """Build a human-readable description of one registered tool for the system prompt.
+
+    Args:
+        tool_name: Key present in ``TOOL_REGISTRY``.
+
+    Returns:
+        Multi-line string with name, docstring, and callable signature.
+    """
     tool = TOOL_REGISTRY[tool_name]
     return f"Name: {tool_name}\nDescription: {inspect.getdoc(tool)}\nSignature: {inspect.signature(tool)}"
 
 
 def system_prompt() -> str:
+    """Return the system prompt including rules and all tool descriptions.
+
+    Returns:
+        Formatted ``SYSTEM_PROMPT`` with ``{tool_list_repr}`` filled in.
+    """
     tools = "\n\n".join(tool_description(name) for name in TOOL_REGISTRY)
     return SYSTEM_PROMPT.format(tool_list_repr=tools)

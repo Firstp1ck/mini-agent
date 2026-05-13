@@ -8,6 +8,7 @@ from agent.runner import run_agent
 
 
 def main() -> None:
+    """Application entrypoint: start the mini-agent interactive session."""
     run_agent()
 
 

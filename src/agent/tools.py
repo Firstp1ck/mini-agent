@@ -6,7 +6,14 @@ from typing import Any
 
 
 def resolve_abs_path(path_str: str) -> Path:
-    """Resolve a user path relative to the current working directory."""
+    """Resolve a path string to an absolute ``Path`` (cwd for relative paths).
+
+    Args:
+        path_str: User-supplied path; ``~`` is expanded.
+
+    Returns:
+        Absolute, resolved path.
+    """
     path = Path(path_str).expanduser()
     if not path.is_absolute():
         path = (Path.cwd() / path).resolve()
@@ -14,10 +21,13 @@ def resolve_abs_path(path_str: str) -> Path:
 
 
 def read_file(filename: str) -> dict[str, Any]:
-    """
-    Read and return the full text content of a file.
-    :param filename: File path to read, absolute or relative to cwd.
-    :return: Dict containing file_path and content, or an error.
+    """Read the full text of a file as UTF-8.
+
+    Args:
+        filename: Path to read, absolute or relative to the current working directory.
+
+    Returns:
+        Dict with ``file_path`` and ``content``, or ``file_path`` and ``error``.
     """
     path = resolve_abs_path(filename)
     try:
@@ -27,10 +37,14 @@ def read_file(filename: str) -> dict[str, Any]:
 
 
 def list_files(path: str = ".") -> dict[str, Any]:
-    """
-    List direct children of a directory.
-    :param path: Directory path to list, absolute or relative to cwd.
-    :return: Dict containing path and files with filename/type, or an error.
+    """List immediate children of a directory with basic file/dir typing.
+
+    Args:
+        path: Directory to list, absolute or relative to cwd. Defaults to ``.``.
+
+    Returns:
+        Dict with ``path`` and ``files`` (each entry has ``filename`` and ``type``),
+        or ``path`` and ``error``.
     """
     full_path = resolve_abs_path(path)
     try:
@@ -44,13 +58,19 @@ def list_files(path: str = ".") -> dict[str, Any]:
 
 
 def edit_file(path: str, old_str: str, new_str: str) -> dict[str, Any]:
-    """
-    Replace the first occurrence of old_str with new_str in a file.
-    If old_str is empty, create or overwrite the file with new_str.
-    :param path: File path to edit, absolute or relative to cwd.
-    :param old_str: Existing text to replace. Empty string means create/overwrite.
-    :param new_str: Replacement text or full file content when creating.
-    :return: Dict containing path and action, or an error.
+    """Replace the first occurrence of ``old_str`` with ``new_str``, or create the file.
+
+    If ``old_str`` is empty, writes ``new_str`` as the full file contents (create or
+    overwrite). Otherwise performs a single in-place replace after reading UTF-8 text.
+
+    Args:
+        path: File path, absolute or relative to cwd.
+        old_str: Substring to replace once; empty means create/overwrite.
+        new_str: Replacement substring or entire file body when creating.
+
+    Returns:
+        Dict with ``path`` and ``action`` (``edited``, ``created_or_overwritten``,
+        or ``old_str_not_found``), or ``path`` and ``error``.
     """
     full_path = resolve_abs_path(path)
     try:
@@ -70,13 +90,19 @@ def edit_file(path: str, old_str: str, new_str: str) -> dict[str, Any]:
 
 
 def bash(command: str, timeout: int = 30) -> dict[str, Any]:
-    """
-    Execute a bash command in the current working directory and return its output.
-    Use this for safe inspection commands, tests, linters, and small scripts.
-    Avoid destructive commands unless the user explicitly requested them.
-    :param command: Bash command to execute.
-    :param timeout: Maximum runtime in seconds, capped at 120.
-    :return: Dict containing command, exit_code, stdout, stderr, and timed_out.
+    """Run a bash one-liner in the current working directory and capture output.
+
+    Intended for inspection, tests, linters, and small scripts. Prefer non-destructive
+    commands unless the user explicitly asked for mutating operations.
+
+    Args:
+        command: Shell command passed to ``bash -lc``.
+        timeout: Max runtime in seconds, clamped to the range ``[1, 120]``.
+
+    Returns:
+        Dict with ``command``, ``exit_code``, ``stdout``, ``stderr``, and
+        ``timed_out``; on timeout, may include ``timeout``; on other failures,
+        ``command`` and ``error``.
     """
     bounded_timeout = max(1, min(int(timeout), 120))
     try:

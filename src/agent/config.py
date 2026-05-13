@@ -17,11 +17,19 @@ FALLBACK_MODELS = [
 
 
 class ModelsClient(Protocol):
-    def list(self, **kwargs: object) -> object: ...
+    def list(self, **kwargs: object) -> object:
+        """List models from the Anthropic API."""
+        ...
 
 
 def write_env_value(env_path: Path, key: str, value: str) -> None:
-    """Create or update one KEY=value entry in a .env file."""
+    """Create or update a single KEY=value entry in a .env file.
+
+    Args:
+        env_path: Path to the .env file (created if missing).
+        key: Environment variable name.
+        value: Value to assign (written without extra quoting).
+    """
     line = f"{key}={value}\n"
     if not env_path.exists():
         env_path.write_text(line, encoding="utf-8")
@@ -42,7 +50,18 @@ def write_env_value(env_path: Path, key: str, value: str) -> None:
 
 
 def prompt_api_key(env_path: Path, reason: str) -> str:
-    """Ask for an Anthropic API key without echoing it."""
+    """Prompt for an Anthropic API key without echoing input.
+
+    Args:
+        env_path: .env path that will be mentioned in the prompt text.
+        reason: Message printed before the secure password prompt.
+
+    Returns:
+        The trimmed API key entered by the user.
+
+    Raises:
+        SystemExit: If input is empty or the prompt is cancelled.
+    """
     print(reason)
     print(f"I'll create/update {env_path} with the key you enter.")
     try:
@@ -56,14 +75,31 @@ def prompt_api_key(env_path: Path, reason: str) -> str:
 
 
 def validate_api_key(api_key: str) -> anthropic.Anthropic:
-    """Create a client and verify the key with a small Models API request."""
+    """Build an Anthropic client and verify the API key with a small request.
+
+    Args:
+        api_key: Anthropic API key string.
+
+    Returns:
+        Configured client after a successful models list call.
+    """
     client = anthropic.Anthropic(api_key=api_key)
     client.models.list(limit=1)
     return client
 
 
 def ensure_anthropic_client() -> anthropic.Anthropic:
-    """Load, verify, and persist a working Anthropic API key."""
+    """Load, verify, and persist a working Anthropic API key.
+
+    Reads ``ANTHROPIC_API_KEY`` from the environment or ``.env``, prompts until
+    verification succeeds, then writes the key back to ``.env``.
+
+    Returns:
+        Authenticated Anthropic client.
+
+    Raises:
+        SystemExit: On empty key, auth failure after retries, connection or API errors.
+    """
     env_path = Path.cwd() / ".env"
     load_dotenv(env_path)
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -98,7 +134,15 @@ def ensure_anthropic_client() -> anthropic.Anthropic:
 
 
 def current_models(models_client: ModelsClient) -> list[tuple[str, str]]:
-    """Return available Anthropic models, newest first, with a static fallback."""
+    """Return Claude model ids and display names, falling back to a static list.
+
+    Args:
+        models_client: Client exposing a ``list`` method compatible with Anthropic.
+
+    Returns:
+        Pairs of ``(model_id, display_name)`` for Claude models, or
+        ``FALLBACK_MODELS`` if the API call fails or returns nothing usable.
+    """
     try:
         response = models_client.list(limit=20)
         models = []
@@ -113,7 +157,17 @@ def current_models(models_client: ModelsClient) -> list[tuple[str, str]]:
 
 
 def choose_model(models: list[tuple[str, str]]) -> str:
-    """Prompt for a default Anthropic model from a numbered list."""
+    """Prompt the user to pick a default Anthropic model from a numbered list.
+
+    Args:
+        models: List of ``(model_id, display_name)`` options.
+
+    Returns:
+        Selected ``model_id``.
+
+    Raises:
+        SystemExit: If the prompt is cancelled without a selection.
+    """
     default_index = next((i for i, (model_id, _) in enumerate(models) if model_id == DEFAULT_MODEL), 0)
 
     print("\nChoose a default Anthropic model:")
@@ -138,7 +192,14 @@ def choose_model(models: list[tuple[str, str]]) -> str:
 
 
 def ensure_anthropic_model(models_client: ModelsClient) -> str:
-    """Load ANTHROPIC_MODEL or prompt once and persist it to .env."""
+    """Return ``ANTHROPIC_MODEL`` from env or prompt once and save to ``.env``.
+
+    Args:
+        models_client: Client used to list models when prompting.
+
+    Returns:
+        Model id string to pass to the Messages API.
+    """
     env_path = Path.cwd() / ".env"
     load_dotenv(env_path, override=False)
 
