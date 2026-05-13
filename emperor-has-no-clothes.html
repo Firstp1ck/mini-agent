@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Emperor Has No Clothes: Building an AI Coding Agent in 200 Lines of Code — Mihail Eric</title>
+  <meta name="description" content="Build a functional coding agent from scratch in about 200 lines of Python." />
+  <style>
+    :root {
+      --bg: #fafaf8;
+      --text: #1a1a1a;
+      --muted: #5c5c5c;
+      --accent: #2563eb;
+      --code-bg: #f0f0ec;
+      --border: #e5e5e0;
+      --max: 42rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141414;
+        --text: #e8e8e6;
+        --muted: #9a9a96;
+        --accent: #60a5fa;
+        --code-bg: #1f1f1c;
+        --border: #2e2e2a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1.25rem 4rem;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .wrap { max-width: var(--max); margin: 0 auto; }
+    .source-note {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .source-note a { color: var(--accent); }
+    article h1 {
+      font-size: clamp(1.65rem, 4vw, 2.15rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.5rem;
+    }
+    .byline {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    article h2 {
+      font-size: 1.35rem;
+      margin: 2.25rem 0 0.75rem;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+    article h3 {
+      font-size: 1.1rem;
+      margin: 1.75rem 0 0.5rem;
+      font-weight: 600;
+    }
+    p { margin: 0 0 1rem; }
+    ul, ol { margin: 0 0 1rem; padding-left: 1.35rem; }
+    li { margin-bottom: 0.35rem; }
+    strong { font-weight: 600; }
+    a { color: var(--accent); text-underline-offset: 2px; }
+    pre {
+      margin: 1rem 0 1.25rem;
+      padding: 1rem 1.1rem;
+      overflow-x: auto;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    }
+    code {
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2.5rem 0;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+    .tags span {
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.2rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+    }
+    blockquote.dialog {
+      margin: 1rem 0;
+      padding-left: 1rem;
+      border-left: 3px solid var(--border);
+      color: var(--text);
+    }
+    blockquote.dialog p { margin-bottom: 0.65rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <article>
+      <h1>Building an AI Coding Agent in 200 Lines of Code</h1>
+
+      <p>Today AI coding assistants feel like magic. You describe what you want in sometimes barely coherent English, and they read files, edit your project, and write functional code.</p>
+
+      <p>But here’s the thing: the core of these tools isn’t magic. It’s about 200 lines of straightforward Python.</p>
+
+      <p>Let’s build a functional coding agent from scratch.</p>
+
+      <h2>The Mental Model</h2>
+      <p>Before we write any code, let’s understand what’s actually happening when you use a coding agent. It’s essentially just a conversation with a powerful LLM that has a toolbox.</p>
+      <ol>
+        <li><strong>You</strong> send a message (“Create a new file with a hello world function”)</li>
+        <li><strong>The LLM</strong> decides it needs a tool and responds with a structured tool call (or multiple tool calls)</li>
+        <li><strong>Your program</strong> executes that tool call locally (actually creates the file)</li>
+        <li><strong>The result</strong> gets sent back to the LLM</li>
+        <li><strong>The LLM</strong> uses that context to continue or respond</li>
+      </ol>
+      <p>That’s the whole loop. The LLM never actually touches your filesystem. It just <em>asks</em> for things to happen, and your code makes them happen.</p>
+
+      <h2>Three Tools You Need</h2>
+      <p>Our coding agent fundamentally needs three capabilities:</p>
+      <ul>
+        <li><strong>Read files</strong> so the LLM can see your code</li>
+        <li><strong>List files</strong> so it can navigate your project</li>
+        <li><strong>Edit files</strong> so it can give the directive to create and modify code</li>
+      </ul>
+      <p>That’s it. Polished products in this space usually add more capabilities—including <code>grep</code>, <code>bash</code>, <code>websearch</code>, and similar—but for our purposes we’ll see that three tools is sufficient to do incredible things.</p>
+
+      <h2>Setting Up the Scaffolding</h2>
+      <p>We start with basic imports and an API client. The snippet below uses one vendor’s Python SDK as a concrete example; the same control loop works with any chat-capable model API once you adapt the client call:</p>
+<pre><code>import inspect
+import json
+import os
+
+import anthropic
+from dotenv import load_dotenv
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+load_dotenv()
+
+client = anthropic.Anthropic(api_key=os.environ["VENDOR_API_KEY"])</code></pre>
+
+      <p>Some terminal colors to make outputs readable:</p>
+<pre><code>YOU_COLOR = "\u001b[94m"
+ASSISTANT_COLOR = "\u001b[93m"
+RESET_COLOR = "\u001b[0m"</code></pre>
+
+      <p>And a utility to resolve file paths (so <code>file.py</code> becomes <code>/Users/you/project/file.py</code>):</p>
+<pre><code>def resolve_abs_path(path_str: str) -&gt; Path:
+    """
+    file.py -&gt; /Users/you/project/file.py
+    """
+    path = Path(path_str).expanduser()
+    if not path.is_absolute():
+        path = (Path.cwd() / path).resolve()
+    return path</code></pre>
+
+      <h2>Implementing the Tools</h2>
+      <p>Note you should be detailed about your tool function docstrings as they will be used by the LLM to reason about what tools should be called during the conversation. More on this below.</p>
+
+      <h3>Tool 1: Read File</h3>
+      <p>The simplest tool. Take a filename, return its contents:</p>
+<pre><code>def read_file_tool(filename: str) -&gt; Dict[str, Any]:
+    """
+    Gets the full content of a file provided by the user.
+    :param filename: The name of the file to read.
+    :return: The full content of the file.
+    """
+    full_path = resolve_abs_path(filename)
+    print(full_path)
+    with open(str(full_path), "r") as f:
+        content = f.read()
+    return {
+        "file_path": str(full_path),
+        "content": content
+    }</code></pre>
+      <p>We return a dictionary because the LLM needs structured context about what happened.</p>
+
+      <h3>Tool 2: List Files</h3>
+      <p>Navigate directories by listing their contents:</p>
+<pre><code>def list_files_tool(path: str) -&gt; Dict[str, Any]:
+    """
+    Lists the files in a directory provided by the user.
+    :param path: The path to a directory to list files from.
+    :return: A list of files in the directory.
+    """
+    full_path = resolve_abs_path(path)
+    all_files = []
+    for item in full_path.iterdir():
+        all_files.append({
+            "filename": item.name,
+            "type": "file" if item.is_file() else "dir"
+        })
+    return {
+        "path": str(full_path),
+        "files": all_files
+    }</code></pre>
+
+      <h3>Tool 3: Edit File</h3>
+      <p>This is the most complex tool, but still straightforward. It handles two cases:</p>
+      <ul>
+        <li><strong>Creating a new file</strong> when <code>old_str</code> is empty</li>
+        <li><strong>Replacing text</strong> by finding <code>old_str</code> and replacing with <code>new_str</code></li>
+      </ul>
+<pre><code>def edit_file_tool(path: str, old_str: str, new_str: str) -&gt; Dict[str, Any]:
+    """
+    Replaces first occurrence of old_str with new_str in file. If old_str is empty,
+    create/overwrite file with new_str.
+    :param path: The path to the file to edit.
+    :param old_str: The string to replace.
+    :param new_str: The string to replace with.
+    :return: A dictionary with the path to the file and the action taken.
+    """
+    full_path = resolve_abs_path(path)
+    if old_str == "":
+        full_path.write_text(new_str, encoding="utf-8")
+        return {
+            "path": str(full_path),
+            "action": "created_file"
+        }
+    original = full_path.read_text(encoding="utf-8")
+    if original.find(old_str) == -1:
+        return {
+            "path": str(full_path),
+            "action": "old_str not found"
+        }
+    edited = original.replace(old_str, new_str, 1)
+    full_path.write_text(edited, encoding="utf-8")
+    return {
+        "path": str(full_path),
+        "action": "edited"
+    }</code></pre>
+      <p>The convention here: empty <code>old_str</code> means “create this file.” Otherwise, find and replace. Real IDEs add sophisticated fallback behavior when the string isn’t found, but this works.</p>
+
+      <h2>The Tool Registry</h2>
+      <p>We need a way to look up tools by name:</p>
+<pre><code>TOOL_REGISTRY = {
+    "read_file": read_file_tool,
+    "list_files": list_files_tool,
+    "edit_file": edit_file_tool
+}</code></pre>
+
+      <h2>Teaching the LLM About Our Tools</h2>
+      <p>The LLM needs to know what tools exist and how to call them. We generate this dynamically from our function signatures and docstrings:</p>
+<pre><code>def get_tool_str_representation(tool_name: str) -&gt; str:
+    tool = TOOL_REGISTRY[tool_name]
+    return f"""
+    Name: {tool_name}
+    Description: {tool.__doc__}
+    Signature: {inspect.signature(tool)}
+    """
+
+def get_full_system_prompt():
+    tool_str_repr = ""
+    for tool_name in TOOL_REGISTRY:
+        tool_str_repr += "TOOL\n===" + get_tool_str_representation(tool_name)
+        tool_str_repr += f"\n{'='*15}\n"
+    return SYSTEM_PROMPT.format(tool_list_repr=tool_str_repr)</code></pre>
+
+      <p>And the system prompt itself:</p>
+<pre><code>SYSTEM_PROMPT = """
+You are a coding assistant whose goal it is to help us solve coding tasks.
+You have access to a series of tools you can execute. Here are the tools you can execute:
+
+{tool_list_repr}
+
+When you want to use a tool, reply with exactly one line in the format: 'tool: TOOL_NAME({{JSON_ARGS}})' and nothing else.
+Use compact single-line JSON with double quotes. After receiving a tool_result(...) message, continue the task.
+If no tool is needed, respond normally.
+"""</code></pre>
+      <p>This is the key insight: we’re just telling the LLM “here are your tools, here’s the format to call them.” The LLM figures out when and how to use them.</p>
+
+      <h2>Parsing Tool Calls</h2>
+      <p>When the LLM responds, we need to detect if it’s asking us to run a tool:</p>
+<pre><code>def extract_tool_invocations(text: str) -&gt; List[Tuple[str, Dict[str, Any]]]:
+    """
+    Return list of (tool_name, args) requested in 'tool: name({...})' lines.
+    The parser expects single-line, compact JSON in parentheses.
+    """
+    invocations = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("tool:"):
+            continue
+        try:
+            after = line[len("tool:"):].strip()
+            name, rest = after.split("(", 1)
+            name = name.strip()
+            if not rest.endswith(")"):
+                continue
+            json_str = rest[:-1].strip()
+            args = json.loads(json_str)
+            invocations.append((name, args))
+        except Exception:
+            continue
+    return invocations</code></pre>
+      <p>Simple text parsing. Look for lines starting with <code>tool:</code>, extract the function name and JSON arguments.</p>
+
+      <h2>The LLM Call</h2>
+      <p>A thin wrapper around the API:</p>
+<pre><code>def execute_llm_call(conversation: List[Dict[str, str]]):
+    system_content = ""
+    messages = []
+
+    for msg in conversation:
+        if msg["role"] == "system":
+            system_content = msg["content"]
+        else:
+            messages.append(msg)
+
+    response = client.messages.create(
+        model="your-model-id",  # use your provider’s model string
+        max_tokens=2000,
+        system=system_content,
+        messages=messages
+    )
+    return response.content[0].text</code></pre>
+
+      <h2>The Agent Loop</h2>
+      <p>Now we put it all together. This is where the “magic” happens:</p>
+<pre><code>def run_coding_agent_loop():
+    print(get_full_system_prompt())
+    conversation = [{
+        "role": "system",
+        "content": get_full_system_prompt()
+    }]
+    while True:
+        try:
+            user_input = input(f"{YOU_COLOR}You:{RESET_COLOR}:")
+        except (KeyboardInterrupt, EOFError):
+            break
+        conversation.append({
+            "role": "user",
+            "content": user_input.strip()
+        })
+        while True:
+            assistant_response = execute_llm_call(conversation)
+            tool_invocations = extract_tool_invocations(assistant_response)
+            if not tool_invocations:
+                print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR}: {assistant_response}")
+                conversation.append({
+                    "role": "assistant",
+                    "content": assistant_response
+                })
+                break
+            for name, args in tool_invocations:
+                tool = TOOL_REGISTRY[name]
+                resp = ""
+                print(name, args)
+                if name == "read_file":
+                    resp = tool(args.get("filename", "."))
+                elif name == "list_files":
+                    resp = tool(args.get("path", "."))
+                elif name == "edit_file":
+                    resp = tool(args.get("path", "."),
+                                args.get("old_str", ""),
+                                args.get("new_str", ""))
+                conversation.append({
+                    "role": "user",
+                    "content": f"tool_result({json.dumps(resp)})"
+                })</code></pre>
+
+      <p>The structure:</p>
+      <ol>
+        <li><strong>Outer loop</strong>: Get user input, add to conversation</li>
+        <li><strong>Inner loop</strong>: Call LLM, check for tool invocations
+          <ul>
+            <li>If no tools needed, print response and break inner loop</li>
+            <li>If tools needed, execute them, add results to conversation, loop again</li>
+          </ul>
+        </li>
+      </ol>
+      <p>The inner loop continues until the LLM responds without requesting any tools. This lets the agent chain multiple tool calls (read a file, then edit it, then confirm the edit).</p>
+
+      <h2>Running It</h2>
+<pre><code>if __name__ == "__main__":
+    run_coding_agent_loop()</code></pre>
+
+      <p>Now you can have conversations like:</p>
+      <blockquote class="dialog">
+        <p><strong>You:</strong> Make me a new file called hello.py and implement hello world in it</p>
+        <p>Agent calls <em>edit_file</em> with path=“hello.py”, old_str="", new_str=“print(‘Hello World’)”</p>
+        <p><strong>Assistant:</strong> Done! Created hello.py with a hello world implementation.</p>
+      </blockquote>
+      <p>Or multi-step interactions:</p>
+      <blockquote class="dialog">
+        <p><strong>You:</strong> Edit hello.py and add a function for multiplying two numbers</p>
+        <p>Agent calls <em>read_file</em> to see current contents. Agent calls <em>edit_file</em> to add the function.</p>
+        <p><strong>Assistant:</strong> Added a multiply function to hello.py.</p>
+      </blockquote>
+
+      <h2>What We Built vs. Production Tools</h2>
+      <p>This is about 200 lines. Mature, productized coding agents typically add:</p>
+      <ul>
+        <li>Better error handling and fallback behaviors</li>
+        <li>Streaming responses for better UX</li>
+        <li>Smarter context management (summarizing long files, etc.)</li>
+        <li>More tools (run commands, search codebase, etc.)</li>
+        <li>Approval workflows for destructive operations</li>
+      </ul>
+      <p>But the core loop? It’s exactly what we built here. The LLM decides what to do, your code executes it, results flow back. That’s the whole architecture.</p>
+      <hr />
+    </article>
+  </div>
+</body>
+</html>
