@@ -9,8 +9,8 @@ A minimal Python coding agent that runs an interactive loop with **Anthropic
 `list_files`, `edit_file`, and `bash`. It emits textual tool calls; this
 program runs them and feeds results back into the conversation.
 
-Inspired by Mihail Eric's *The Emperor Has No Clothes*
-([@emperor-has-no-clothes.html](emperor-has-no-clothes.html)).
+Inspired by Mihail Eric's
+["The Emperor Has No Clothes"](https://www.mihaileric.com/The-Emperor-Has-No-Clothes/).
 
 ## Install & run
 
