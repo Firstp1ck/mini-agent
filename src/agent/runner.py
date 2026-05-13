@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -20,7 +22,7 @@ from agent.prompt import (
     format_new_guide_sections,
     system_prompt,
 )
-from agent.providers import build_provider, resolved_llm_provider
+from agent.providers import Provider, build_provider, resolved_llm_provider
 from agent.tools import TOOL_REGISTRY, work_directories_for_tool
 
 YOU_COLOR = "\033[94m"
@@ -34,6 +36,60 @@ def _repl_exit_hint() -> str:
     if sys.platform == "win32":
         return "Ctrl-Z then Enter, or Ctrl-C, to exit."
     return "Ctrl-D or Ctrl-C to exit."
+
+
+def drive_agent_turn(
+    conversation: list[dict[str, str]],
+    provider: Provider,
+    injected_guide_paths: set[str],
+    user_text: str,
+) -> Iterator[tuple[str, Any]]:
+    """Append one user message and advance the loop until a plain assistant reply.
+
+    This mirrors the CLI tool loop: the model may return tool invocations; each
+    is executed, results are appended, and ``provider.call`` runs again until the
+    reply contains no tools.
+
+    Args:
+        conversation: In-out transcript including the system message at index 0.
+        provider: Configured LLM backend.
+        injected_guide_paths: Mutable set tracking which guide files were merged
+            into the system prompt (same semantics as the REPL).
+        user_text: Non-empty user message for this turn.
+
+    Yields:
+        ``("tool", (tool_name, args_dict, result))`` for each executed tool, then
+        ``("assistant", assistant_text)`` once when the model returns a non-tool
+        reply. The conversation is updated before each yield.
+
+    Raises:
+        KeyError: If the model requests an unknown tool name (same as direct
+            registry lookup).
+    """
+    conversation.append({"role": "user", "content": user_text})
+    while True:
+        assistant_text = provider.call(conversation)
+        invocations = extract_tool_invocations(assistant_text)
+        if not invocations:
+            conversation.append({"role": "assistant", "content": assistant_text})
+            yield ("assistant", assistant_text)
+            return
+
+        conversation.append({"role": "assistant", "content": assistant_text})
+        for name, args in invocations:
+            result = TOOL_REGISTRY[name](**args)
+            guide_candidates: list[Path] = []
+            for directory in work_directories_for_tool(name, args):
+                guide_candidates.extend(collect_guide_paths_walking_up(directory))
+            extra_suffix, _ = format_new_guide_sections(
+                guide_candidates, injected_guide_paths
+            )
+            if extra_suffix:
+                conversation[0]["content"] += extra_suffix
+            yield ("tool", (name, args, result))
+            conversation.append(
+                {"role": "user", "content": f"tool_result({json.dumps(result)})"}
+            )
 
 
 def run_agent() -> None:
@@ -63,26 +119,11 @@ def run_agent() -> None:
         if not user_input:
             continue
 
-        conversation.append({"role": "user", "content": user_input})
-        while True:
-            assistant_text = provider.call(conversation)
-
-            invocations = extract_tool_invocations(assistant_text)
-            if not invocations:
-                print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {assistant_text}")
-                conversation.append({"role": "assistant", "content": assistant_text})
-                break
-
-            conversation.append({"role": "assistant", "content": assistant_text})
-            for name, args in invocations:
+        for kind, payload in drive_agent_turn(
+            conversation, provider, injected_guide_paths, user_input
+        ):
+            if kind == "tool":
+                name, args, _result = payload
                 print(f"{TOOL_COLOR}tool: {name}({json.dumps(args)}){RESET_COLOR}")
-                result = TOOL_REGISTRY[name](**args)
-                guide_candidates: list[Path] = []
-                for directory in work_directories_for_tool(name, args):
-                    guide_candidates.extend(collect_guide_paths_walking_up(directory))
-                extra_suffix, _ = format_new_guide_sections(
-                    guide_candidates, injected_guide_paths
-                )
-                if extra_suffix:
-                    conversation[0]["content"] += extra_suffix
-                conversation.append({"role": "user", "content": f"tool_result({json.dumps(result)})"})
+            else:
+                print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {payload}")

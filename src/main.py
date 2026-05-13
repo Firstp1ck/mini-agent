@@ -12,5 +12,12 @@ def main() -> None:
     run_agent()
 
 
+def main_gui() -> None:
+    """Start the graphical mini-agent window (Tkinter)."""
+    from agent.gui import run_gui
+
+    run_gui()
+
+
 if __name__ == "__main__":
     main()

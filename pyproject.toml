@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 mini-agent = "main:main"
+mini-agent-gui = "main:main_gui"
 
 [dependency-groups]
 build = ["pyinstaller>=6.20.0"]
