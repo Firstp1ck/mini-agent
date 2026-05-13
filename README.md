@@ -1,5 +1,9 @@
 # mini-agent
 
+<p align="center">
+  <img src="icon.png" alt="mini-agent icon: stylized robot on a dark background" width="160" height="160" />
+</p>
+
 A minimal Python coding agent that runs an interactive loop with **Anthropic
 (Claude)** or **OpenAI (GPT)**. The model gets four local tools: `read_file`,
 `list_files`, `edit_file`, and `bash`. It emits textual tool calls; this
