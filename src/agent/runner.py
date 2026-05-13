@@ -34,7 +34,8 @@ def run_agent() -> None:
     provider = build_provider(resolved_llm_provider())
     conversation: list[dict[str, str]] = [{"role": "system", "content": system_prompt()}]
 
-    print("Mini Agent. Ctrl-D or Ctrl-C to exit.")
+    print(f"Mini Agent using {provider.name} ({provider.model}) in {Path.cwd()}.")
+    print("Ctrl-D or Ctrl-C to exit.")
     while True:
         try:
             user_input = input(f"{YOU_COLOR}You:{RESET_COLOR} ").strip()
