@@ -40,6 +40,8 @@ On first run the agent prompts you to:
 2. **Enter the API key** for that provider (`ANTHROPIC_API_KEY` or
    `OPENAI_API_KEY`).
 3. **Pick a default model**, saved as `ANTHROPIC_MODEL` or `OPENAI_MODEL`.
+   The GUI refreshes the model list after you enter a key; you can close the
+   setup window at any time to cancel.
 4. **Pick a thinking / reasoning level**, saved as `MINI_AGENT_THINKING`
    (skipped if that variable is already set in `.env`).
 

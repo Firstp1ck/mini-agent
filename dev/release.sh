@@ -330,45 +330,57 @@ print_info "Before finalizing the release documentation:"
 echo -e "    ${GREEN}/readme-update${NC}  -> updates README.md"
 echo ""
 
-# Commit and push release notes if new or modified
-NOTES_CHANGED=false
-if ! git ls-files --error-unmatch "$RELEASE_NOTES_FILE" >/dev/null 2>&1; then
-    # File is untracked
-    NOTES_CHANGED=true
-elif [ -n "$(git diff -- "$RELEASE_NOTES_FILE" 2>/dev/null)" ]; then
-    # File is tracked but modified
-    NOTES_CHANGED=true
-fi
+# Commit and push release documentation if new or modified. This runs after the
+# README reminder so /readme-update changes are included before the tag triggers
+# the release workflow.
+README_FILE="$PROJECT_ROOT/README.md"
+RELEASE_DOCS_CHANGED=false
+RELEASE_DOC_FILES=("$RELEASE_NOTES_FILE" "$README_FILE")
 
-if [ "$NOTES_CHANGED" = true ]; then
-    read -p "Commit and push release notes? (Y/n) " -n 1 -r
+for doc_file in "${RELEASE_DOC_FILES[@]}"; do
+    if [ ! -f "$doc_file" ]; then
+        continue
+    fi
+    if ! git ls-files --error-unmatch "$doc_file" >/dev/null 2>&1; then
+        RELEASE_DOCS_CHANGED=true
+    elif [ -n "$(git diff -- "$doc_file" 2>/dev/null)" ]; then
+        RELEASE_DOCS_CHANGED=true
+    elif [ -n "$(git diff --cached -- "$doc_file" 2>/dev/null)" ]; then
+        RELEASE_DOCS_CHANGED=true
+    fi
+done
+
+if [ "$RELEASE_DOCS_CHANGED" = true ]; then
+    read -p "Commit and push release documentation? (Y/n) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        print_info "Staging release notes..."
-        git add "$RELEASE_NOTES_FILE"
+        print_info "Staging release documentation..."
+        for doc_file in "${RELEASE_DOC_FILES[@]}"; do
+            [ -f "$doc_file" ] && git add "$doc_file"
+        done
 
-        print_info "Committing release notes..."
-        if git commit -m "docs: add release notes for $VERSION" >/dev/null 2>&1; then
-            print_success "Release notes committed"
+        print_info "Committing release documentation..."
+        if git commit -m "docs: update release documentation for $VERSION" >/dev/null 2>&1; then
+            print_success "Release documentation committed"
         else
-            print_error "Failed to commit release notes"
+            print_error "Failed to commit release documentation"
             exit 1
         fi
 
-        print_info "Pushing release notes to remote..."
+        print_info "Pushing release documentation to remote..."
         if git push origin "$CURRENT_BRANCH" >/dev/null 2>&1; then
-            print_success "Release notes pushed successfully"
+            print_success "Release documentation pushed successfully"
         else
-            print_error "Failed to push release notes"
+            print_error "Failed to push release documentation"
             echo "You can push manually with: git push origin $CURRENT_BRANCH"
             exit 1
         fi
     else
-        print_warning "Skipped committing release notes"
-        print_warning "Make sure release notes are pushed before the workflow runs!"
+        print_warning "Skipped committing release documentation"
+        print_warning "Make sure release documentation is pushed before the workflow runs!"
     fi
 else
-    print_info "Release notes already committed — no changes detected"
+    print_info "Release documentation already committed — no changes detected"
 fi
 
 # Update version in pyproject.toml
