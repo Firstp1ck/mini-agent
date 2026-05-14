@@ -23,12 +23,11 @@ pulls in no vendor SDK; ``TemplateProvider.setup`` and ``.call`` raise
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 
-from agent.providers._shared import choose_model, prompt_api_key, write_env_value
+from agent.providers._shared import choose_model, env_file_path, prompt_api_key, write_env_value
 from agent.providers.base import Provider
 
 DEFAULT_MODEL = "TODO-default-model-id"
@@ -73,7 +72,7 @@ def _ensure_client() -> Any:
         SystemExit: On empty key, auth failure after retries, or unrecoverable
             connection / API errors.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path)
     api_key = os.getenv(_API_KEY_ENV, "").strip()
 
@@ -113,7 +112,7 @@ def _ensure_model(client: Any) -> str:
     Returns:
         Model id string to pass to the vendor API.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path, override=False)
 
     model = os.getenv(_MODEL_ENV, "").strip()

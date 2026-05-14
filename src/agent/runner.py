@@ -24,6 +24,7 @@ from agent.prompt import (
     system_prompt,
 )
 from agent.providers import Provider, build_provider, resolved_llm_provider
+from agent.providers._shared import env_file_path
 from agent.providers._thinking import prompt_thinking_level_cli
 from agent.tools import TOOL_REGISTRY, work_directories_for_tool
 
@@ -169,7 +170,7 @@ def run_agent() -> None:
     between assistant replies and tool execution until a non-tool response is
     printed.
     """
-    load_dotenv(Path.cwd() / ".env", override=False)
+    load_dotenv(env_file_path(), override=False)
     provider = build_provider(resolved_llm_provider())
     prompt_thinking_level_cli(provider.name, provider.model)
     injected_guide_paths: set[str] = set()

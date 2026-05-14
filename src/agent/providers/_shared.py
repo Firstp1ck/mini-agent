@@ -8,7 +8,22 @@ vendor's provider class instead.
 from __future__ import annotations
 
 import getpass
+import os
+import sys
 from pathlib import Path
+
+
+def env_file_path() -> Path:
+    """Return the canonical ``.env`` path for this runtime.
+
+    Packaged Windows builds store settings in the user's local app data so the
+    installer and first-run setup do not need administrator writes. Source runs
+    keep using the current working directory for project-local configuration.
+    """
+    if sys.platform == "win32" and getattr(sys, "frozen", False):
+        base = Path(os.getenv("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+        return base / "mini-agent" / ".env"
+    return Path.cwd() / ".env"
 
 
 def write_env_value(env_path: Path, key: str, value: str) -> None:
@@ -20,6 +35,7 @@ def write_env_value(env_path: Path, key: str, value: str) -> None:
         value: Value to assign (written without extra quoting).
     """
     line = f"{key}={value}\n"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
     if not env_path.exists():
         env_path.write_text(line, encoding="utf-8")
         return

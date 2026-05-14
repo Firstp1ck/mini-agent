@@ -8,10 +8,9 @@ defaults, and error mapping. The rest of the agent only sees the
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Literal, cast
 
-from agent.providers._shared import write_env_value
+from agent.providers._shared import env_file_path, write_env_value
 from agent.providers.base import Provider
 
 ProviderName = Literal["anthropic", "openai"]
@@ -58,7 +57,7 @@ def _prompt_for_provider() -> ProviderName:
     Raises:
         SystemExit: If the prompt is cancelled without a selection.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
 
     print("\nChoose an LLM provider:")
     for index, (_, label) in enumerate(AVAILABLE_PROVIDERS, start=1):

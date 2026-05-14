@@ -7,14 +7,13 @@ older Chat Completions API for new text-generation work.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 import openai
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from agent.providers._shared import choose_model, prompt_api_key, write_env_value
+from agent.providers._shared import choose_model, env_file_path, prompt_api_key, write_env_value
 from agent.providers._thinking import (
     ThinkingLevel,
     is_openai_reasoning_model,
@@ -115,7 +114,7 @@ def _ensure_client() -> OpenAI:
         SystemExit: On empty key, auth failure after retries, or unrecoverable
             connection / API errors.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path)
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
@@ -179,7 +178,7 @@ def _ensure_model(client: OpenAI) -> str:
     Returns:
         Model id string to pass to the Responses API.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path, override=False)
 
     model = os.getenv("OPENAI_MODEL", "").strip()

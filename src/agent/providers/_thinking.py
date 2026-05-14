@@ -17,10 +17,9 @@ Defaults at the time of writing (always check the live provider docs):
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Literal
 
-from agent.providers._shared import write_env_value
+from agent.providers._shared import env_file_path, write_env_value
 
 ThinkingLevel = Literal["off", "low", "medium", "high", "max", "xhigh"]
 
@@ -198,7 +197,7 @@ def save_mini_agent_thinking(value: str) -> None:
     Args:
         value: Stored verbatim (for example ``"auto"`` or ``"medium"``).
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     write_env_value(env_path, "MINI_AGENT_THINKING", value)
     os.environ["MINI_AGENT_THINKING"] = value
 
@@ -232,7 +231,7 @@ def prompt_thinking_level_cli(provider_name: str, model_id: str) -> None:
         )
 
     default_index = 0
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     while True:
         try:
             choice = input(f"Thinking level [default {default_index + 1}]: ").strip().lower()

@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import threading
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 import tkinter as tk
@@ -33,7 +32,7 @@ from agent.gui._setup_providers import (
 )
 from agent.gui.theme import DANGER, MUTED, SUCCESS
 from agent.providers import AVAILABLE_PROVIDERS, ProviderName
-from agent.providers._shared import write_env_value
+from agent.providers._shared import env_file_path, write_env_value
 from agent.providers._thinking import VALID_LEVELS
 
 
@@ -90,7 +89,7 @@ def apply_setup_result(result: SetupResult) -> None:
     Args:
         result: Values returned by :func:`run_setup_dialog`.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     info = provider_info(result.provider)
 
     write_env_value(env_path, "MINI_AGENT_PROVIDER", result.provider)

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 import anthropic
 from dotenv import load_dotenv
 
-from agent.providers._shared import choose_model, prompt_api_key, write_env_value
+from agent.providers._shared import choose_model, env_file_path, prompt_api_key, write_env_value
 from agent.providers._thinking import (
     ThinkingLevel,
     anthropic_thinking_mode,
@@ -131,7 +130,7 @@ def _ensure_client() -> anthropic.Anthropic:
         SystemExit: On empty key, auth failure after retries, or unrecoverable
             connection / API errors.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path)
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
 
@@ -195,7 +194,7 @@ def _ensure_model(client: anthropic.Anthropic) -> str:
     Returns:
         Model id string to pass to the Messages API.
     """
-    env_path = Path.cwd() / ".env"
+    env_path = env_file_path()
     load_dotenv(env_path, override=False)
 
     model = os.getenv("ANTHROPIC_MODEL", "").strip()

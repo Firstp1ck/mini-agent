@@ -25,6 +25,7 @@ from agent.gui.shell import ShellWidgets, apply_global_style, build_chat_shell
 from agent.gui.theme import ACCENT, ACCENT_ACTIVE, CHAT_FG, MUTED, SHELL_BG
 from agent.gui.transcript_panel import TranscriptPanel
 from agent.providers import Provider, ProviderName, resolved_llm_provider
+from agent.providers._shared import env_file_path
 from agent.runner import drive_agent_turn
 
 
@@ -175,7 +176,7 @@ class MiniAgentApp:
         resolved into a valid provider), the chat shell stays alive and a
         centered "Resume setup" overlay is shown instead of closing the app.
         """
-        load_dotenv(Path.cwd() / ".env", override=False)
+        load_dotenv(env_file_path(), override=False)
         provider_name = self._resolve_setup_on_main_thread()
         if provider_name is None:
             self._show_needs_setup_screen(
