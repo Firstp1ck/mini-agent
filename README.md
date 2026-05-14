@@ -33,6 +33,15 @@ uv sync
 uv run mini-agent
 ```
 
+Linux release tarballs can be installed for the current user with:
+
+```bash
+curl -L https://github.com/Firstp1ck/mini-agent/releases/latest/download/mini-agent-linux.tar.gz | tar -xz && ./mini-agent/install.sh
+```
+
+That installs the GUI launcher as `mini-agent`, the terminal tool as
+`mini-agent-cli`, and a desktop entry with the app icon.
+
 On first run the agent prompts you to:
 
 1. **Pick a provider** (Anthropic or OpenAI) and saves the choice to `.env`

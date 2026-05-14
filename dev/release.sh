@@ -214,7 +214,11 @@ if [ "$RELEASE_EXISTS" = true ] || [ "$TAG_EXISTS_LOCAL" = true ] || [ "$TAG_EXI
         print_warning "Tag $VERSION will be deleted and recreated"
     fi
 
-    read -p "Do you want to delete and recreate? (y/N) " -n 1 -r
+    if ! read -p "Do you want to delete and recreate? (y/N) " -n 1 -r; then
+        echo
+        print_info "Release cancelled"
+        exit 0
+    fi
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         print_info "Release cancelled"
@@ -453,7 +457,11 @@ echo ""
 print_warning "You are about to create and push tag: $VERSION"
 print_warning "This will trigger the GitHub Actions release workflow"
 echo ""
-read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+if ! read -p "Are you sure you want to continue? (y/N) " -n 1 -r; then
+    echo
+    print_info "Release cancelled"
+    exit 0
+fi
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     print_info "Release cancelled"

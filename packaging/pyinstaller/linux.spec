@@ -1,37 +1,71 @@
 # -*- mode: python ; coding: utf-8 -*-
-# CI: one-file binary at dist/linux/mini-agent.
+# CI: GUI and CLI one-file binaries under dist/linux/.
 import os
 
 from PyInstaller.config import CONF
 
 _SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
 _ROOT = os.path.normpath(os.path.join(_SPEC_DIR, "..", ".."))
-CONF["distpath"] = os.path.join(_ROOT, "dist", "linux")
-_main = os.path.join(_ROOT, "src", "main.py")
+_distpath = os.path.join(_ROOT, "dist", "linux")
+CONF["distpath"] = _distpath
+_gui_main = os.path.join(_ROOT, "src", "main_gui.py")
+_cli_main = os.path.join(_ROOT, "src", "main_cli.py")
 _src = os.path.join(_ROOT, "src")
 
-a = Analysis(
-    [_main],
-    pathex=[_src],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    noarchive=False,
-    optimize=0,
-)
-pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
+def build_analysis(entrypoint):
+    """Create a PyInstaller analysis for one mini-agent entrypoint."""
+    return Analysis(
+        [entrypoint],
+        pathex=[_src],
+        binaries=[],
+        datas=[],
+        hiddenimports=[],
+        hookspath=[],
+        hooksconfig={},
+        runtime_hooks=[],
+        excludes=[],
+        noarchive=False,
+        optimize=0,
+    )
+
+
+gui_a = build_analysis(_gui_main)
+gui_pyz = PYZ(gui_a.pure)
+
+cli_a = build_analysis(_cli_main)
+cli_pyz = PYZ(cli_a.pure)
+
+gui_exe = EXE(
+    gui_pyz,
+    gui_a.scripts,
+    gui_a.binaries,
+    gui_a.datas,
     [],
     name="mini-agent",
+    distpath=_distpath,
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
+cli_exe = EXE(
+    cli_pyz,
+    cli_a.scripts,
+    cli_a.binaries,
+    cli_a.datas,
+    [],
+    name="mini-agent-cli",
+    distpath=_distpath,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

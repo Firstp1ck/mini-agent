@@ -20,7 +20,7 @@ jobs:
             artifact_name: mini-agent-windows-setup
           - os: ubuntu-latest
             spec: packaging/pyinstaller/linux.spec
-            artifact_name: mini-agent-linux-onefile
+            artifact_name: mini-agent-linux-app
           - os: macos-latest
             spec: packaging/pyinstaller/macos.spec
             artifact_name: mini-agent-macos-dmg
@@ -86,6 +86,59 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($refName)) { $refName = "dev" }
           makensis /NOCD /DVERSION=$refName packaging/windows/mini-agent.nsi
 
+      - name: Package Linux app with desktop icon
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -eux
+          mkdir -p dist/linux-package/mini-agent/bin
+          mkdir -p dist/linux-package/mini-agent/share/applications
+          mkdir -p dist/linux-package/mini-agent/share/icons/hicolor/256x256/apps
+          cp dist/linux/mini-agent dist/linux-package/mini-agent/bin/mini-agent
+          cp dist/linux/mini-agent-cli dist/linux-package/mini-agent/bin/mini-agent-cli
+          cp icon.png dist/linux-package/mini-agent/share/icons/hicolor/256x256/apps/mini-agent.png
+          cat > dist/linux-package/mini-agent/share/applications/mini-agent.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=mini-agent
+          Comment=Minimal Python coding agent
+          Exec=mini-agent
+          Icon=mini-agent
+          Terminal=false
+          Categories=Development;
+          EOF
+          cat > dist/linux-package/mini-agent/install.sh <<'EOF'
+          #!/usr/bin/env sh
+          set -eu
+          APP_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+          BIN_DIR="${HOME}/.local/bin"
+          APP_DESKTOP_DIR="${HOME}/.local/share/applications"
+          ICON_DIR="${HOME}/.local/share/icons/hicolor/256x256/apps"
+          mkdir -p "$BIN_DIR" "$APP_DESKTOP_DIR" "$ICON_DIR"
+          cp "$APP_DIR/bin/mini-agent" "$BIN_DIR/mini-agent"
+          cp "$APP_DIR/bin/mini-agent-cli" "$BIN_DIR/mini-agent-cli"
+          cp "$APP_DIR/share/icons/hicolor/256x256/apps/mini-agent.png" "$ICON_DIR/mini-agent.png"
+          cp "$APP_DIR/share/applications/mini-agent.desktop" "$APP_DESKTOP_DIR/mini-agent.desktop"
+          chmod +x "$BIN_DIR/mini-agent" "$BIN_DIR/mini-agent-cli"
+          command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APP_DESKTOP_DIR" || true
+          command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+          echo "mini-agent installed to $BIN_DIR"
+          echo "Run the GUI from your app launcher or with: mini-agent"
+          echo "Run the CLI with: mini-agent-cli"
+          EOF
+          cat > dist/linux-package/mini-agent/uninstall.sh <<'EOF'
+          #!/usr/bin/env sh
+          set -eu
+          rm -f "${HOME}/.local/bin/mini-agent"
+          rm -f "${HOME}/.local/bin/mini-agent-cli"
+          rm -f "${HOME}/.local/share/applications/mini-agent.desktop"
+          rm -f "${HOME}/.local/share/icons/hicolor/256x256/apps/mini-agent.png"
+          command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${HOME}/.local/share/applications" || true
+          command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+          echo "mini-agent uninstalled from your user account"
+          EOF
+          chmod +x dist/linux-package/mini-agent/install.sh dist/linux-package/mini-agent/uninstall.sh
+          tar -C dist/linux-package -czf dist/linux/mini-agent-linux.tar.gz mini-agent
+
       - name: Create macOS DMG
         if: matrix.os == 'macos-latest'
         run: |
@@ -106,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: dist/linux/mini-agent
+          path: dist/linux/mini-agent-linux.tar.gz
 
       - name: Upload artifact (macOS)
         if: matrix.os == 'macos-latest'
