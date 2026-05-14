@@ -84,7 +84,7 @@ jobs:
         run: |
           $refName = "${{ github.ref_name }}"
           if ([string]::IsNullOrWhiteSpace($refName)) { $refName = "dev" }
-          makensis /DVERSION=$refName packaging/windows/mini-agent.nsi
+          makensis /NOCD /DVERSION=$refName packaging/windows/mini-agent.nsi
 
       - name: Create macOS DMG
         if: matrix.os == 'macos-latest'
