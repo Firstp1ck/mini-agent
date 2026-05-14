@@ -55,6 +55,18 @@ jobs:
       - name: Build with PyInstaller
         run: uv run pyinstaller ${{ matrix.spec }}
 
+      - name: Normalize Windows NSIS inputs
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          foreach ($name in @('mini-agent', 'mini-agent-cli')) {
+            $withoutExt = "dist/windows-nsis/$name"
+            $withExt = "dist/windows-nsis/$name.exe"
+            if ((Test-Path $withoutExt) -and -not (Test-Path $withExt)) {
+              Move-Item $withoutExt $withExt
+            }
+          }
+
       - name: Verify Windows NSIS inputs
         if: matrix.os == 'windows-latest'
         shell: pwsh
