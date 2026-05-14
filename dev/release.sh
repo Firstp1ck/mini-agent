@@ -391,7 +391,7 @@ UV_LOCK="$PROJECT_ROOT/uv.lock"
 if [ -f "$UV_LOCK" ]; then
     print_info "Regenerating uv.lock..."
     if command_exists uv; then
-        (cd "$PROJECT_ROOT" && uv lock --no-upgrade --native-tls >/dev/null 2>&1 || uv lock --native-tls >/dev/null 2>&1)
+        (cd "$PROJECT_ROOT" && uv lock --no-upgrade --system-certs >/dev/null 2>&1 || uv lock --system-certs >/dev/null 2>&1)
         print_success "Regenerated uv.lock"
     else
         print_warning "uv not found, skipping uv.lock regeneration"

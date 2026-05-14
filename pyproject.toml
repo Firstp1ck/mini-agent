@@ -32,7 +32,7 @@ build = ["pyinstaller>=6.20.0"]
 [tool.uv]
 package = true
 # Use Windows/macOS/Linux trust store for PyPI (same corporate roots as browsers).
-native-tls = true
+system-certs = true
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src/main.py", "src/agent"]

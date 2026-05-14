@@ -134,6 +134,9 @@ class _SetupController:
         # idle. Cancelled and re-scheduled on every keystroke / paste in the
         # API key entry so we only hit the network once the user pauses.
         self._api_debounce_id: str | None = None
+        # Worker threads may finish after the dialog has been closed. Tk widgets
+        # become invalid immediately on destroy, so callbacks must no-op then.
+        self._closed = False
 
         widgets["provider_combo"].bind("<<ComboboxSelected>>", self._on_provider_change)
         widgets["model_combo"].bind("<<ComboboxSelected>>", self._on_model_change)
@@ -157,6 +160,24 @@ class _SetupController:
     def result(self) -> SetupResult | None:
         """Return what the user picked, or ``None`` if they cancelled."""
         return self._result
+
+    def _dialog_exists(self) -> bool:
+        """Return whether the dialog still has live Tk widget commands."""
+        if self._closed:
+            return False
+        try:
+            return bool(self._dialog.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def _post_to_dialog(self, callback: Any) -> None:
+        """Schedule a Tk callback from a worker if the dialog is not closing."""
+        if self._closed:
+            return
+        try:
+            self._dialog.after(0, callback)
+        except tk.TclError:
+            self._closed = True
 
     def _show_api_row(self, info: ProviderSetupInfo) -> None:
         """Reveal the API key row, hint, and Verify button; prefill from ``.env``.
@@ -217,7 +238,10 @@ class _SetupController:
     def _cancel_api_debounce(self) -> None:
         """Cancel a pending debounced fetch if one is queued."""
         if self._api_debounce_id is not None:
-            self._dialog.after_cancel(self._api_debounce_id)
+            try:
+                self._dialog.after_cancel(self._api_debounce_id)
+            except tk.TclError:
+                self._closed = True
             self._api_debounce_id = None
 
     def _fire_debounced_fetch(self) -> None:
@@ -253,6 +277,8 @@ class _SetupController:
             state: ``"ok"`` for a green check, ``"fail"`` for a red cross, or
                 any other value (typically ``""`` or ``"clear"``) to hide it.
         """
+        if not self._dialog_exists():
+            return
         var = self._widgets["verify_status_var"]
         indicator = self._widgets["verify_indicator"]
         if state == "ok":
@@ -285,8 +311,8 @@ class _SetupController:
     def _models_fetch_worker(self, pid: ProviderName, api_key: str) -> None:
         """Call :func:`fetch_live_models` off-thread and post the result back."""
         models, error = fetch_live_models(pid, api_key)
-        self._dialog.after(
-            0, lambda: self._on_models_fetched(pid, api_key, models, error)
+        self._post_to_dialog(
+            lambda: self._on_models_fetched(pid, api_key, models, error)
         )
 
     def _on_models_fetched(
@@ -310,6 +336,8 @@ class _SetupController:
             models: ``(id, display_name)`` pairs returned by the SDK.
             error: Error message, or ``""`` on success.
         """
+        if not self._dialog_exists():
+            return
         current_pid = self._label_to_id.get(self._widgets["provider_var"].get())
         current_key = self._widgets["api_var"].get().strip()
         if pid != current_pid or api_key != current_key:
@@ -413,8 +441,8 @@ class _SetupController:
     ) -> None:
         """Run :func:`validate_credentials` off-thread and post the result back."""
         error = validate_credentials(pid, api_key)
-        self._dialog.after(
-            0, lambda: self._on_validate_done(pid, api_key, model_id, thinking_id, error)
+        self._post_to_dialog(
+            lambda: self._on_validate_done(pid, api_key, model_id, thinking_id, error)
         )
 
     def _on_validate_done(
@@ -426,6 +454,8 @@ class _SetupController:
         error: str,
     ) -> None:
         """Apply the validation outcome on the Tk main thread."""
+        if not self._dialog_exists():
+            return
         if error:
             self._widgets["status_var"].set(error)
             self._set_form_state(True)
@@ -436,12 +466,19 @@ class _SetupController:
             model=model_id,
             thinking=thinking_id,
         )
+        self._closed = True
+        self._cancel_api_debounce()
         self._dialog.destroy()
 
     def _cancel(self) -> None:
         """Close the dialog without saving anything."""
         self._result = None
-        self._dialog.destroy()
+        self._closed = True
+        self._cancel_api_debounce()
+        try:
+            self._dialog.destroy()
+        except tk.TclError:
+            pass
 
 
 def run_setup_dialog(root: tk.Tk) -> SetupResult | None:
